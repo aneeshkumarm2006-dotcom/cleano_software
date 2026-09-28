@@ -10,6 +10,8 @@ export function breakMs(c: ClockStateResponse, now: Date): number {
 
 /** Working time so far: clocked-in time minus breaks, up to clock-out or now. */
 export function workedMs(c: ClockStateResponse, now: Date): number {
+  // A finished shift: the server's own total, which knows about every session.
+  if (c.state === "CLOCKED_OUT" && c.workedMinutes != null) return c.workedMinutes * 60_000;
   if (!c.clockedInAt) return 0;
   const end = c.clockedOutAt ? ms(c.clockedOutAt) : now.getTime();
   return Math.max(0, end - ms(c.clockedInAt) - breakMs(c, c.clockedOutAt ? new Date(ms(c.clockedOutAt)) : now));

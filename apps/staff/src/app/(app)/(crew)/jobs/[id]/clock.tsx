@@ -136,6 +136,10 @@ function ClockBody({
                 <Text variant="small" color="onChrome3" numeral>
                   {remaining >= 0 ? `${duration(remaining)} still to run` : `${duration(-remaining)} over`}
                 </Text>
+              ) : clock.state === "CLOCKED_OUT" && clock.clockedOutAt ? (
+                <Text variant="small" color="onChrome3" numeral>
+                  {`Worked · out at ${clockTime(clock.clockedOutAt, timeZone)}`}
+                </Text>
               ) : null}
             </View>
           </ProgressRing>

@@ -37,8 +37,14 @@ export type ClockState = "NOT_STARTED" | "CLOCKED_IN" | "ON_BREAK" | "CLOCKED_OU
 
 export interface MyClock {
   state: ClockState;
+  /**
+   * While on the clock, when the running session started; once the shift is
+   * finished, when it first started — so a finished shift keeps its times.
+   */
   clockedInAt: Date | null;
   clockedOutAt: Date | null;
+  /** Time worked (sessions less breaks), in whole minutes, once finished. */
+  workedMinutes: number | null;
   openSession: { id: string; startedAt: Date } | null;
   sessions: { id: string | null; startedAt: Date; endedAt: Date | null }[];
   breaks: { id: string; startedAt: Date; endedAt: Date | null }[];
@@ -103,8 +109,9 @@ export async function myClocks(
               ? "ON_BREAK"
               : "CLOCKED_IN"
             : "CLOCKED_OUT",
-      clockedInAt: summary.isOpen ? (open?.startedAt ?? summary.firstStartedAt) : null,
+      clockedInAt: summary.isOpen ? (open?.startedAt ?? summary.firstStartedAt) : summary.firstStartedAt,
       clockedOutAt: summary.isOpen ? null : summary.lastEndedAt,
+      workedMinutes: summary.count > 0 && !summary.isOpen ? summary.activeMinutes : null,
       openSession: open ? { id: open.id, startedAt: open.startedAt } : null,
       sessions,
       breaks: myBreaks,
@@ -158,7 +165,12 @@ export function toSummary(
     status: job.status as JobSummary["status"],
     clock: {
       state: clock?.state ?? "NOT_STARTED",
-      clockedInAt: clock?.clockedInAt ? clock.clockedInAt.toISOString() : null,
+      // The list's contract is "set while clocked in"; a finished shift's
+      // start belongs to the clock screen, not here.
+      clockedInAt:
+        clock?.clockedInAt && (clock.state === "CLOCKED_IN" || clock.state === "ON_BREAK")
+          ? clock.clockedInAt.toISOString()
+          : null,
     },
   };
 }

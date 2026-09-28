@@ -2,6 +2,8 @@
 // so clocking in actually starts the timer and ticks actually stick.
 import type { ChecklistItem, ClockStateResponse, KitReportItem } from "@bookmops/api/v1";
 
+import { workedMs } from "@/lib/clock-math";
+
 import type { DataSource } from "../source";
 import { delay } from "./delay";
 
@@ -52,7 +54,13 @@ export const previewClockApi = {
   clockState: (jobId) => delay(clockOf(jobId)),
   clockIn: (jobId, e) => {
     const c = clockOf(jobId);
-    return save({ ...c, state: "CLOCKED_IN", clockedInAt: c.clockedInAt ?? e.occurredAt, clockedOutAt: null });
+    return save({
+      ...c,
+      state: "CLOCKED_IN",
+      clockedInAt: c.state === "CLOCKED_OUT" ? e.occurredAt : (c.clockedInAt ?? e.occurredAt),
+      clockedOutAt: null,
+      workedMinutes: undefined,
+    });
   },
   startBreak: (jobId, e) => {
     const c = clockOf(jobId);
@@ -65,12 +73,14 @@ export const previewClockApi = {
   kitReport: () => delay({ items: KIT }),
   clockOut: async (jobId, body) => {
     const c = clockOf(jobId);
-    const clock = await save({
+    const closed: ClockStateResponse = {
       ...c,
       state: "CLOCKED_OUT",
       clockedOutAt: body.occurredAt,
       breaks: c.breaks.map((b) => (b.endedAt ? b : { ...b, endedAt: body.occurredAt })),
-    });
+    };
+    // As the server does: a finished shift keeps its times and says what it came to.
+    const clock = await save({ ...closed, workedMinutes: Math.round(workedMs(closed, new Date(body.occurredAt)) / 60_000) });
     const restockNeeded = body.report.items.some((i) => i.levelStatus === "LOW" || i.levelStatus === "EMPTY" || i.status === "LOW" || i.status === "EMPTY");
     return { clock, jobCompleted: true, restockNeeded };
   },

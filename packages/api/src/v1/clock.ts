@@ -37,8 +37,15 @@ export const BreakSpan = z.object({
 export const ClockStateResponse = z.object({
   jobId: z.string(),
   state: openEnum(CLOCK_STATES),
+  /** While on the clock, the running session's start; once finished, the shift's first start. */
   clockedInAt: Instant.nullable(),
   clockedOutAt: Instant.nullable(),
+  /**
+   * Once the shift is finished: time worked, sessions less breaks, in whole
+   * minutes. Absent while on the clock (the phone counts it live) and from
+   * older servers, where the phone falls back to in → out less breaks.
+   */
+  workedMinutes: z.number().int().nonnegative().optional(),
   breaks: z.array(BreakSpan),
   plannedMinutes: z.number().int().nullable(),
   /**

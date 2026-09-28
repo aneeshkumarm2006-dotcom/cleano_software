@@ -19,7 +19,15 @@ export function applyOptimistic(qc: QueryClient, action: OutboxAction): void {
     const at = action.kind === "clockOut" ? action.body.occurredAt : action.event.occurredAt;
     switch (action.kind) {
       case "clockIn":
-        return { ...prev, state: "CLOCKED_IN", clockedInAt: prev.clockedInAt ?? at, clockedOutAt: null };
+        // Back on after a finished shift: the clock runs from this tap, as the
+        // server's does, not from the finished shift's first start.
+        return {
+          ...prev,
+          state: "CLOCKED_IN",
+          clockedInAt: prev.state === "CLOCKED_OUT" ? at : (prev.clockedInAt ?? at),
+          clockedOutAt: null,
+          workedMinutes: undefined,
+        };
       case "startBreak":
         return { ...prev, state: "ON_BREAK", breaks: [...prev.breaks, { startedAt: at, endedAt: null }] };
       case "endBreak":

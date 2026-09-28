@@ -156,6 +156,7 @@ async function buildState(actor: Actor, job: JobForClock & { clockInTime?: Date 
     state: mine.state,
     clockedInAt: mine.clockedInAt ? mine.clockedInAt.toISOString() : null,
     clockedOutAt: mine.clockedOutAt ? mine.clockedOutAt.toISOString() : null,
+    ...(mine.workedMinutes != null ? { workedMinutes: mine.workedMinutes } : {}),
     breaks: mine.breaks.map((b) => ({
       startedAt: b.startedAt.toISOString(),
       endedAt: b.endedAt ? b.endedAt.toISOString() : null,
