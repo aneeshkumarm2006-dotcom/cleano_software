@@ -10,6 +10,8 @@ import { db } from "@/lib/org-db";
 import { orgFromContext } from "@/lib/org-context";
 import { originForSlug, requestOrigin } from "@/lib/org-url";
 import { sendAccountEmail } from "@/lib/email";
+import { endPushDevicesOf } from "@/lib/session-revocation";
+import { betterAuthRateLimitStorage } from "@/lib/shared-rate-limit";
 
 /**
  * What a switched-off person is told when they try to sign in: the same words
@@ -139,6 +141,17 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
   /**
+   * The Expo plugin's OAuth helper, switched off.
+   *
+   * `GET /expo-authorization-proxy?authorizationURL=…` redirects to whatever
+   * URL it is handed and, with `oauthState`, first sets an `oauth_state`
+   * cookie to a value the caller chose: an open redirect on every company's
+   * own address, and a way to plant OAuth state. Bookmops signs in with email
+   * and password only — no social provider is configured — so nothing needs
+   * it. The [...all] route refuses it too, before better-auth sees it.
+   */
+  disabledPaths: ["/expo-authorization-proxy"],
+  /**
    * Brute-force limiting, stated out loud rather than inherited.
    *
    * better-auth turns this on by default, and the default behaves differently
@@ -152,17 +165,18 @@ export const auth = betterAuth({
    * Five attempts a minute per path. Enough for someone fumbling a password,
    * far too few to search a password space.
    *
-   * KNOWN LIMIT: the counters are per instance, held in memory. Vercel runs
-   * several, so an attacker spreading requests across them gets more attempts
-   * than this number suggests. Fluid Compute reuses instances, which blunts it,
-   * but the real fix for a determined attacker is a rate-limit rule on the
-   * Vercel WAF in front of /api/auth/*, not this. Moving the counters into the
-   * database would also work, at the cost of a write on every request.
+   * Shared across instances where it matters: sign-in, sign-up and the
+   * password-reset paths count in Postgres (RateLimitCounter, through the
+   * platform client; lib/shared-rate-limit.ts), so spreading attempts across
+   * Vercel's instances no longer multiplies them. Every other path counts in
+   * memory, as before, rather than paying a write per request. A Vercel WAF
+   * rate-limit rule on /api/auth/* is still recommended in front of this.
    */
   rateLimit: {
     enabled: true,
     window: 60,
     max: 5,
+    customStorage: betterAuthRateLimitStorage(),
     /**
      * `get-session` is a READ, and the blanket five does not belong on it.
      *
@@ -351,6 +365,9 @@ export const auth = betterAuth({
       db.user
         .update({ where: { id: user.id }, data: { mustChangePassword: false } })
         .catch((e) => console.error("clear mustChangePassword", e));
+      // Sessions end with the reset (revokeSessionsOnPasswordReset) and their
+      // push tokens with them; this also clears tokens older than that link.
+      await endPushDevicesOf(user.id).catch((e) => console.error("reset: push devices", e));
       const role = await roleOf(user.id);
       sendAccountEmail({
         to: user.email,

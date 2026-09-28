@@ -239,6 +239,22 @@ async function main() {
       check("auth: sign-in trusts the scheme as origin only if no callback asks for it", signInRedirect.status === 200 || signInRedirect.status === 403, signInRedirect.status);
     }
 
+    // ── The Expo plugin's OAuth proxy is switched off (VULN-003) ───────────
+    for (const path of [
+      "/api/auth/expo-authorization-proxy?authorizationURL=https%3A%2F%2Fevil.test%2F&oauthState=planted",
+      "/api/auth/expo-authorization-proxy/?authorizationURL=https%3A%2F%2Fevil.test%2F%3Fstate%3Dx",
+      "/api/auth/Expo-Authorization-Proxy?authorizationURL=https%3A%2F%2Fevil.test%2F&oauthState=planted",
+      "/api/auth/expo%2Dauthorization%2Dproxy?authorizationURL=https%3A%2F%2Fevil.test%2F&oauthState=planted",
+    ]) {
+      const r = await call("GET", HOST_A, path, { noAppHeaders: true });
+      const cookies = ([] as string[]).concat(r.headers["set-cookie"] ?? []);
+      check(
+        `auth: ${path.split("?")[0]} is 404, no redirect, no cookie`,
+        r.status === 404 && !r.headers.location && !cookies.some((c) => /oauth_state|state=/.test(c)),
+        { status: r.status, location: r.headers.location, cookies },
+      );
+    }
+
     // ── Gates ─────────────────────────────────────────────────────────────
     {
       const r = await call("GET", HOST_A, "/api/v1/me");
@@ -378,6 +394,36 @@ async function main() {
       const gone = await db.pushDevice.count({ where: { token } });
       check("devices: unregistering your own token removes it", mine.status === 200 && gone === 0);
       check("devices: stored in the caller's company", row?.organizationId === F.orgA.id);
+    }
+    {
+      // A token belongs to the session that registered it, and ends with it.
+      const token = `ExponentPushToken[${randomUUID()}]`;
+      const phone = await signIn(HOST_A, F.users.cleaner.email);
+      await call("POST", HOST_A, "/api/v1/devices", { cookie: phone, body: { token, platform: "ios", appVersion: "1.0.0 (1)" } });
+      const row = await db.pushDevice.findFirst({ where: { token }, select: { sessionId: true } });
+      const sess = row?.sessionId ? await db.session.findUnique({ where: { id: row.sessionId }, select: { userId: true } }) : null;
+      check("devices: the registering session is stored", sess?.userId === F.users.cleaner.id, row);
+      const out = await call("POST", HOST_A, "/api/auth/sign-out", {
+        cookie: phone,
+        body: {},
+        noAppHeaders: true,
+        headers: { Origin: `http://${HOST_A}` },
+      });
+      const left = await db.pushDevice.count({ where: { token } });
+      check("devices: signing out deletes that session's token", out.status === 200 && left === 0, { status: out.status, left });
+
+      // One company at a time: registering in B removes the token from A.
+      const moving = `ExponentPushToken[${randomUUID()}]`;
+      await call("POST", HOST_A, "/api/v1/devices", { cookie, body: { token: moving, platform: "ios", appVersion: "1.0.0 (1)" } });
+      const b = await signIn(HOST_B, F.users.bCleaner.email);
+      const inB = await call("POST", HOST_B, "/api/v1/devices", { cookie: b, body: { token: moving, platform: "ios", appVersion: "1.0.0 (1)" } });
+      const rows = await db.pushDevice.findMany({ where: { token: moving }, select: { organizationId: true } });
+      check(
+        "devices: registering in another company removes the old company's row",
+        inB.status === 200 && rows.length === 1 && rows[0]?.organizationId === F.orgB.id,
+        rows,
+      );
+      await db.pushDevice.deleteMany({ where: { token: moving } });
     }
 
     // ── Jobs ──────────────────────────────────────────────────────────────
@@ -548,6 +594,93 @@ async function main() {
       check("clock-out: a second tap answers with the state the first made", out2.status === 200 && out2.body?.clock?.state === "CLOCKED_OUT", out2.body);
     }
 
+    // ── Compound-key reads with a narrow select (lib/db-scoped.ts) ────────
+    // A crew member who is NOT the job's lead keeps their clock only on their
+    // JobAssignment row, read by (jobId, cleanerId) with a narrow select. That
+    // read used to come back null outside a transaction: the break said "clock
+    // in first", and a retried clock-out re-sent the office's notice.
+    {
+      const start = new Date(Date.now() + 30 * 60_000);
+      const crewJob = await db.job.create({
+        data: {
+          organizationId: F.orgA.id,
+          jobNumber: 9900,
+          clientName: "Prem Sai Crew",
+          employeeId: F.users.teammate.id,
+          jobType: "Standard Clean",
+          location: "9900 Test Street",
+          startTime: start,
+          endTime: new Date(start.getTime() + 3 * 3600_000),
+          jobDate: start,
+          status: "SCHEDULED",
+          price: 120,
+          subtotalAmount: 120,
+          requiredCleaners: 2,
+          cleaners: { connect: [{ id: F.users.teammate.id }, { id: F.users.cleaner.id }] },
+        },
+        select: { id: true },
+      });
+      await db.jobAssignment.create({ data: { organizationId: F.orgA.id, jobId: crewJob.id, cleanerId: F.users.teammate.id } });
+      await db.jobAssignment.create({ data: { organizationId: F.orgA.id, jobId: crewJob.id, cleanerId: F.users.cleaner.id } });
+      const path = job(crewJob.id);
+      const cin = await post(HOST_A, `${path}/clock-in`, cookie, event(1_000));
+      check("crew: a cleaner who isn't the lead clocks in", cin.status === 200 && cin.body?.state === "CLOCKED_IN", cin.body);
+      const br = await post(HOST_A, `${path}/breaks`, cookie, event());
+      check("crew: ...and can start a break (their assignment row is found)", br.status === 200 && br.body?.state === "ON_BREAK", br.body);
+      const be = await post(HOST_A, `${path}/breaks/current/end`, cookie, event());
+      check("crew: ...and end it", be.status === 200 && be.body?.state === "CLOCKED_IN" && !!be.body?.breaks?.[0]?.endedAt, be.body);
+
+      const notices = () =>
+        db.notification.count({ where: { organizationId: F.orgA.id, notificationKey: "admin.clock.clocked_out", href: `/admin/jobs/${crewJob.id}` } });
+      const waitFor = async (want: number) => {
+        let n = await notices();
+        for (let i = 0; i < 20 && n < want; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          n = await notices();
+        }
+        return n;
+      };
+      const e = { ...event(), report: { items: [] } };
+      const out = await post(HOST_A, `${path}/clock-out`, cookie, e);
+      const first = await waitFor(1);
+      check("crew: clock-out tells the office once", out.status === 200 && out.body?.clock?.state === "CLOCKED_OUT" && first === 1, { out: out.body, first });
+      // The answer was lost after the commit: the key is freed (as a 5xx frees
+      // it) and the phone sends the same event again. That is the resume path,
+      // and the tail already ran, so no second notice.
+      await db.idempotencyRecord.deleteMany({ where: { organizationId: F.orgA.id, userId: F.users.cleaner.id, key: e.clientEventId } });
+      const again = await post(HOST_A, `${path}/clock-out`, cookie, e);
+      await new Promise((r) => setTimeout(r, 4_000));
+      const second = await notices();
+      check("crew: a resumed clock-out doesn't tell the office twice (tailAlreadyRan)", again.status === 200 && again.headers["idempotent-replayed"] === undefined && second === 1, { again: again.body, second });
+
+      // The scoped client itself, on a connection that bypasses RLS, so the
+      // check in code is the only thing deciding.
+      const { PrismaClient } = await import("@prisma/client");
+      const { scopedTo, CrossTenantError } = await import("../src/lib/db-scoped");
+      const raw = new PrismaClient({ datasources: { db: { url: process.env.FIXTURE_DATABASE_URL } } });
+      try {
+        const key = { jobId_cleanerId: { jobId: crewJob.id, cleanerId: F.users.cleaner.id } };
+        const narrow = await scopedTo(raw, F.orgA.id).jobAssignment.findUnique({ where: key, select: { clockOutTime: true } });
+        check("scoped: same company, narrow select finds the row", !!narrow?.clockOutTime, narrow);
+        check("scoped: ...and hands back only the fields asked for", !!narrow && Object.keys(narrow).join(",") === "clockOutTime", narrow);
+        const asked = await scopedTo(raw, F.orgA.id).jobAssignment.findUnique({ where: key, select: { organizationId: true } });
+        check("scoped: a select that asks for organizationId keeps it", asked?.organizationId === F.orgA.id, asked);
+        const omitted = await scopedTo(raw, F.orgA.id).jobAssignment.findUnique({ where: key, omit: { organizationId: true } });
+        check("scoped: omit organizationId still finds the row, and leaves it out", !!omitted && !("organizationId" in omitted), omitted);
+        const foreign = await scopedTo(raw, F.orgB.id).jobAssignment.findUnique({ where: key, select: { clockOutTime: true } });
+        check("scoped: another company's compound lookup is null", foreign === null, foreign);
+        let threw: unknown = null;
+        try {
+          await scopedTo(raw, F.orgB.id).jobAssignment.findUniqueOrThrow({ where: key, select: { clockOutTime: true } });
+        } catch (err) {
+          threw = err;
+        }
+        check("scoped: ...and findUniqueOrThrow throws CrossTenantError", threw instanceof CrossTenantError, String(threw));
+      } finally {
+        await raw.$disconnect();
+      }
+    }
+
     // In-flight with the same body, on a fresh key.
     {
       const e = event();
@@ -571,11 +704,26 @@ async function main() {
     // A phone that really was offline made no request between its tap and
     // this one. Staging answers slowly enough that this test's own earlier
     // requests would otherwise (correctly) disprove the claim.
+    // Activity is per person (UserRequestActivity), so "went offline" clears
+    // it; the sessions are dated before the tap, since a session newer than
+    // the tap is itself proof of being online. Waits out the wrapper's
+    // after-response write of the request before, so it can't land late.
     const wentOffline = async (msAgo: number) => {
+      await new Promise((r) => setTimeout(r, 1_500));
+      await db.userRequestActivity.deleteMany({ where: { userId: F.users.cleaner.id } });
       await db.session.updateMany({
         where: { userId: F.users.cleaner.id },
-        data: { lastRequestAt: new Date(Date.now() - msAgo) },
+        data: { createdAt: new Date(Date.now() - msAgo) },
       });
+    };
+    const activeAt = async (msAgo: number) => {
+      const second = Math.floor((Date.now() - msAgo) / 1_000);
+      const minute = Math.floor(second / 60);
+      await db.$executeRaw`
+        INSERT INTO "UserRequestActivity" ("organizationId", "userId", "minute", "seconds")
+        VALUES (${F.orgA.id}, ${F.users.cleaner.id}, ${minute}, ${BigInt(1) << BigInt(second - minute * 60)})
+        ON CONFLICT ("organizationId", "userId", "minute")
+        DO UPDATE SET "seconds" = "UserRequestActivity"."seconds" | EXCLUDED."seconds"`;
     };
     {
       await wentOffline(10 * 60_000);
@@ -584,9 +732,12 @@ async function main() {
       const s = await db.jobWorkSession.findFirst({ where: { jobId: F.jobs.offline, cleanerId: F.users.cleaner.id } });
       check("offline: a 3-minute gap is applied at the phone's time", r.status === 200 && near(s?.startedAt, e.occurredAt, 50) && r.body?.pendingReview === false, { r: r.body, s });
 
-      // Online well after the tap and before this request: disproved.
-      const sess = await db.session.findMany({ where: { userId: F.users.cleaner.id }, select: { id: true } });
-      await db.session.updateMany({ where: { id: { in: sess.map((x) => x.id) } }, data: { lastRequestAt: new Date(Date.now() - 60_000) } });
+      // Online well after the tap and before this request: disproved, even
+      // though a request inside the reconnect grace came after it (the
+      // single "last request" this replaced was overwritten by exactly that).
+      await wentOffline(10 * 60_000);
+      await activeAt(60_000);
+      await activeAt(5_000);
       const b = event(2 * 60_000);
       const br = await post(HOST_A, `${job(F.jobs.offline)}/breaks`, cookie, b);
       const brk = await db.jobBreak.findFirst({ where: { jobId: F.jobs.offline, cleanerId: F.users.cleaner.id } });
@@ -640,6 +791,24 @@ async function main() {
       check("offline: lateness is judged at the applied (arrival) time, as §6 says", strike === 1, strike);
     }
     {
+      // A session signed in after the tap: the phone was online then, so the
+      // tap isn't provably offline even with no other request on record.
+      await wentOffline(30 * 60_000);
+      const fresh = await signIn(HOST_A, F.users.cleaner.email, PASSWORD, true);
+      const b = event(60_000);
+      const r = await post(HOST_A, `${job(F.jobs.late)}/breaks`, fresh, b);
+      const req = await db.timeLogChangeRequest.findFirst({ where: { clientEventId: b.clientEventId } });
+      check(
+        "offline: an event from a session signed in after the tap is not proven offline",
+        r.status === 200 && req?.offlineReason === "NOT_PROVEN_OFFLINE" && r.body?.pendingReview === true,
+        { r: r.body, req },
+      );
+      const end = await post(HOST_A, `${job(F.jobs.late)}/breaks/current/end`, fresh, event());
+      check("offline: ...and that break ends normally", end.status === 200, end.body);
+      const recorded = await db.userRequestActivity.count({ where: { userId: F.users.cleaner.id } });
+      check("offline: authenticated requests are recorded per person", recorded >= 1, recorded);
+    }
+    {
       // A clock-out with no clock-in is kept for the office, not dropped.
       const e = event(60_000);
       const r = await post(HOST_A, `${job(F.jobs.mineTomorrow)}/clock-out`, cookie, { ...e, report: { items: [] } });
@@ -657,6 +826,10 @@ async function main() {
     // ── Password change ends the other sessions ───────────────────────────
     {
       const other = await signIn(HOST_A, F.users.cleaner.email);
+      const keptToken = `ExponentPushToken[${randomUUID()}]`;
+      const otherToken = `ExponentPushToken[${randomUUID()}]`;
+      await call("POST", HOST_A, "/api/v1/devices", { cookie, body: { token: keptToken, platform: "ios", appVersion: "1.0.0 (1)" } });
+      await call("POST", HOST_A, "/api/v1/devices", { cookie: other, body: { token: otherToken, platform: "ios", appVersion: "1.0.0 (1)" } });
       const wrong = await call("POST", HOST_A, "/api/v1/me/password", {
         cookie,
         body: { currentPassword: "wrong-password", newPassword: "Another-Pass-2026" },
@@ -671,6 +844,26 @@ async function main() {
       const theirs = await call("GET", HOST_A, "/api/v1/me", { cookie: other });
       check("me/password: this device stays signed in", mine.status === 200, mine.body);
       check("me/password: every other session ends", theirs.status === 401, theirs.body);
+      const keptRows = await db.pushDevice.count({ where: { token: keptToken } });
+      const otherRows = await db.pushDevice.count({ where: { token: otherToken } });
+      check("me/password: this device's push token stays, the others' go", keptRows === 1 && otherRows === 0, { keptRows, otherRows });
+    }
+
+    // ── Shared rate limit (lib/shared-rate-limit.ts) ──────────────────────
+    if (process.env.PLATFORM_DATABASE_URL && process.env.BETTER_AUTH_SECRET) {
+      const { sharedLimitHit } = await import("../src/lib/shared-rate-limit");
+      const subject = `probe-${randomUUID()}@example.com`;
+      const opts = { max: 2, windowMs: 60_000 };
+      const hits = [];
+      for (let i = 0; i < 3; i++) hits.push(await sharedLimitHit("v1test:probe", subject, opts));
+      check("shared limit: the third hit in a window is over a max of 2", JSON.stringify(hits) === "[false,false,true]", hits);
+      const raw = await db.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM "RateLimitCounter" WHERE "key" LIKE ${`%${subject}%`}`;
+      const hex = await db.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM "RateLimitCounter" WHERE "key" !~ '^[0-9a-f]{64}$'`;
+      check("shared limit: no raw subject is stored, every key is a digest", raw[0]?.n === 0 && hex[0]?.n === 0, { raw, hex });
+    } else {
+      console.log("SKIP  shared limit (PLATFORM_DATABASE_URL / BETTER_AUTH_SECRET not set)");
     }
 
     // ── Record: training, documents, strikes (./api-v1/record.ts) ─────────

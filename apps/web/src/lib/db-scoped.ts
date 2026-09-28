@@ -282,6 +282,16 @@ function plan(operation: string, a: Record<string, unknown>, organizationId: str
           stripOrganizationId: true,
         };
       }
+      // The same hole from the other side: `omit: { organizationId: true }`.
+      const omit = a.omit as Record<string, unknown> | undefined;
+      if (omit?.organizationId) {
+        return {
+          operation,
+          args: { ...a, omit: { ...omit, organizationId: false } },
+          postFilter: true,
+          stripOrganizationId: true,
+        };
+      }
       return { operation, args: a, postFilter: true };
     }
     return {

@@ -15,7 +15,7 @@ export const POST = v1Route(
     body: UploadRequest,
     response: UploadTicket,
     // Each ticket is storage the company pays for (API_V1.md §4).
-    limit: { name: "upload-sign", max: 60, windowMs: 60 * 60_000 },
+    limit: { name: "upload-sign", max: 60, windowMs: 60 * 60_000, shared: true },
   },
   (ctx) =>
     signJobPhotoUpload(ctx.actor, {

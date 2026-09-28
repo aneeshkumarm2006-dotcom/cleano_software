@@ -45,6 +45,7 @@ import { CrossTenantError } from "@/lib/db-scoped";
 import { db } from "@/lib/org-db";
 import { runAsOrg, type OrgContext } from "@/lib/org-context";
 import { rateLimitHit } from "@/lib/rate-limit";
+import { sharedLimitHit } from "@/lib/shared-rate-limit";
 import { orgSlugFromHost, PLATFORM_ORG_SLUG, publicHostFromHeaders } from "@/lib/tenant";
 
 import type { Actor } from "../actor";
@@ -52,7 +53,9 @@ import { roleAllowed, type Access } from "./access";
 import { flushEffects, type Effect } from "../effects";
 import type { Failure, Result } from "../result";
 import { E, errorBody, errorResponse, jsonResponse, V1Error } from "./http";
+import { recordActivity } from "./activity";
 import { claimKey, completeKey, isValidKey, releaseKey, requestHash } from "./idempotency";
+import { readJsonBody } from "./body";
 import { verifiedSessionToken } from "./session-token";
 import { appVersions, isBelow, parseVersion } from "./versions";
 
@@ -61,8 +64,8 @@ import { appVersions, isBelow, parseVersion } from "./versions";
 /**
  * A cheap limit per address, before the database. Set with carrier NAT in
  * mind: a whole crew on one mobile address at shift start must not lock each
- * other out. Per instance, in memory (see lib/rate-limit.ts); the shared-store
- * limit the design asks for is an open item.
+ * other out. Per instance, in memory (see lib/rate-limit.ts); the endpoints
+ * where spreading across instances matters add `shared: true` to their limit.
  */
 const IP_LIMIT = { max: 600, windowMs: 60_000 };
 const USER_LIMIT = { max: 240, windowMs: 60_000 };
@@ -71,6 +74,18 @@ const MAX_BODY_BYTES = 64 * 1024;
 const MAX_BODY_BYTES_CEILING = 512 * 1024;
 
 // ── Types ───────────────────────────────────────────────────────────────────
+
+/**
+ * A limit by name. `shared: true` adds a second layer counted in Postgres
+ * across every instance (lib/shared-rate-limit.ts) behind the in-memory one,
+ * for the endpoints where `limit x instances` matters.
+ */
+export interface NamedLimit {
+  name: string;
+  max: number;
+  windowMs: number;
+  shared?: boolean;
+}
 
 export interface RouteOptions<B extends z.ZodType | undefined, Q extends z.ZodType | undefined> {
   /** tenant: a company's own address. platform: the front door; never reads a tenant. */
@@ -90,14 +105,39 @@ export interface RouteOptions<B extends z.ZodType | undefined, Q extends z.ZodTy
    * An extra per-person limit for an endpoint that costs something (API_V1.md
    * §4). Counted after idempotency, so a replayed key isn't counted again.
    */
-  limit?: { name: string; max: number; windowMs: number };
+  limit?: NamedLimit;
   /** An extra per-address limit for a platform endpoint, by name. */
-  ipLimit?: { name: string; max: number; windowMs: number };
+  ipLimit?: NamedLimit;
   /**
    * A larger body cap than the default 64 KB, for the one kind of request that
    * needs it (a drawn signature's strokes). Never above MAX_BODY_BYTES_CEILING.
    */
   maxBodyBytes?: number;
+  /**
+   * For an idempotent route whose answer shouldn't sit in IdempotencyRecord
+   * for 30 days (signed document links, money): store only `ref(answer)` --
+   * ids and status, nothing else -- and on a replay rebuild the answer with
+   * `reread`, from current data, firing no effects. Errors are stored as
+   * usual (a code and a message).
+   */
+  replay?: ReplayOptions;
+}
+
+/** What a replay-by-reference route stores: ids and status only. */
+export type ReplayRef = Record<string, string | number | boolean | null>;
+
+export interface ReplayOptions {
+  ref: (answer: never) => ReplayRef;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the route's own context; checked where it is declared
+  reread: (ctx: AuthedContext<any, any>, ref: ReplayRef) => Promise<HandlerResult<unknown>>;
+}
+
+const REPLAY_REF = "$replayRef";
+
+function storedRef(body: unknown): ReplayRef | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const ref = (body as Record<string, unknown>)[REPLAY_REF];
+  return ref && typeof ref === "object" && !Array.isArray(ref) ? (ref as ReplayRef) : null;
 }
 
 type Infer<T> = T extends z.ZodType ? z.output<T> : undefined;
@@ -124,8 +164,8 @@ export interface AuthedContext<B, Q> extends TenantContext<B, Q> {
   session: {
     id: string;
     token: string;
-    /** The session's previous authenticated v1 request, before this one. */
-    lastRequestAt: Date | null;
+    /** When the session was created (signed in). The offline clock rule reads it (API_V1.md §6). */
+    createdAt: Date;
   };
   idempotencyKey: string | null;
 }
@@ -220,21 +260,25 @@ function limitOrThrow(name: string, key: string, opts: { max: number; windowMs: 
   if (rateLimitHit(name, key, opts)) throw E.rateLimited(opts.windowMs / 1000);
 }
 
-async function readJsonBody(req: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
-  // Refused on the declared length before a byte is read; the read itself is
-  // checked again below for a body that lied about its length or sent none.
-  const declared = Number(req.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
-  }
-  const text = await req.text();
-  if (text.length > maxBytes) throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
-  if (!text) return undefined;
+/** The in-memory limit, then (for `shared`) the one every instance counts. */
+async function namedLimitOrThrow(name: string, key: string, opts: NamedLimit): Promise<void> {
+  limitOrThrow(name, key, opts);
+  if (opts.shared) await sharedLimitOrThrow(name, key, opts);
+}
+
+/**
+ * The shared layer. Fails closed: a store that can't be reached refuses the
+ * request as retryable, rather than letting an unmetered one through.
+ */
+export async function sharedLimitOrThrow(name: string, key: string, opts: { max: number; windowMs: number }): Promise<void> {
+  let over: boolean;
   try {
-    return JSON.parse(text);
-  } catch {
-    throw E.badRequest("That request wasn't valid JSON.");
+    over = await sharedLimitHit(name, key, opts);
+  } catch (e) {
+    console.error(JSON.stringify({ at: "v1.shared-limit", name, error: String(e).slice(0, 200) }));
+    throw E.internal();
   }
+  if (over) throw E.rateLimited(opts.windowMs / 1000);
 }
 
 function queryObject(url: URL): Record<string, string> {
@@ -314,7 +358,7 @@ export function v1Route<
     try {
       // 2. IP limit.
       limitOrThrow("v1:ip", ip, IP_LIMIT);
-      if (options.ipLimit) limitOrThrow(`v1:${options.ipLimit.name}:ip`, ip, options.ipLimit);
+      if (options.ipLimit) await namedLimitOrThrow(`v1:${options.ipLimit.name}:ip`, ip, options.ipLimit);
 
       // 3. CSRF.
       checkCsrf(req);
@@ -351,7 +395,7 @@ export function v1Route<
           base.body = parseOrThrow(options.body, await readJsonBody(req, cap), requestId, "body");
         } else if (method !== "GET" && method !== "HEAD") {
           // No body expected: one that is sent anyway is still read and bounded.
-          await readJsonBody(req);
+          await readJsonBody(req, MAX_BODY_BYTES);
         }
       };
 
@@ -409,6 +453,10 @@ export function v1Route<
         });
         if (!person || person.organizationId !== org.id) throw E.unauthenticated();
         log.user = person.id;
+        // Any authenticated request is evidence of being online (API_V1.md
+        // §6), whatever it goes on to answer. Written after the response.
+        const personId = person.id;
+        after(() => runAsOrg(org, () => recordActivity(org.id, personId, receivedAt)));
         if (!person.isActive || person.deletedAt) {
           throw E.forbidden("ACCOUNT_INACTIVE", "This account has been switched off. Contact your office.");
         }
@@ -433,7 +481,7 @@ export function v1Route<
 
         const sessionRow = await db.session.findUnique({
           where: { token: session.session.token },
-          select: { id: true, lastRequestAt: true },
+          select: { id: true, createdAt: true },
         });
         if (!sessionRow) throw E.unauthenticated();
 
@@ -443,6 +491,15 @@ export function v1Route<
           role,
           name: person.name,
           email: person.email,
+        };
+
+        // Built after validation, so it carries the parsed body and query.
+        const ctx: AuthedContext<unknown, unknown> = {
+          ...base,
+          org,
+          actor,
+          session: { id: sessionRow.id, token: session.session.token, createdAt: sessionRow.createdAt },
+          idempotencyKey: null,
         };
 
         // 13. Idempotency.
@@ -458,6 +515,7 @@ export function v1Route<
             throw E.badRequest("The Idempotency-Key must be the event's clientEventId.", "IDEMPOTENCY_KEY_MISMATCH");
           }
           idempotencyKey = key;
+          ctx.idempotencyKey = key;
           const claim = await claimKey({
             userId: person.id,
             key,
@@ -467,7 +525,16 @@ export function v1Route<
           });
           if (claim.kind === "replay") {
             log.replay = true;
-            await touchSession(sessionRow, receivedAt);
+            const ref = options.replay && claim.statusCode < 400 ? storedRef(claim.body) : null;
+            if (ref && options.replay) {
+              // Rebuilt from current data; nothing stored again, no effects.
+              const again = await options.replay.reread(ctx, ref);
+              if (!again.ok) return finish(errorResponse(failureToError(again), requestId));
+              checkContract(again.value, requestId, options.response);
+              return finish(
+                jsonResponse(claim.statusCode, again.value, requestId, { "Idempotent-Replayed": "true" }),
+              );
+            }
             return finish(
               jsonResponse(claim.statusCode, claim.body, requestId, { "Idempotent-Replayed": "true" }),
             );
@@ -477,26 +544,17 @@ export function v1Route<
 
         // Endpoint-specific limit, after idempotency: a replay isn't counted.
         try {
-          if (options.limit) limitOrThrow(`v1:${options.limit.name}`, `${org.id}:${person.id}`, options.limit);
+          if (options.limit) await namedLimitOrThrow(`v1:${options.limit.name}`, `${org.id}:${person.id}`, options.limit);
         } catch (e) {
           if (recordId) await releaseKey(recordId);
           throw e;
         }
 
-        // Built after validation, so it carries the parsed body and query.
-        const ctx: AuthedContext<unknown, unknown> = {
-          ...base,
-          org,
-          actor,
-          session: { id: sessionRow.id, token: session.session.token, lastRequestAt: sessionRow.lastRequestAt },
-          idempotencyKey,
-        };
-
         // 14. The handler.
         let res: Response;
         try {
           const result = await handler(ctx as ContextFor<A, H, Infer<B>, Infer<Q>>);
-          res = await respond(result, requestId, org, recordId, options.response);
+          res = await respond(result, requestId, org, recordId, options.response, options.replay);
         } catch (e) {
           if (recordId) {
             // A refusal the handler meant is final and stored; anything else
@@ -514,7 +572,6 @@ export function v1Route<
           throw e;
         }
 
-        if (res.status < 400) await touchSession(sessionRow, receivedAt);
         return finish(res);
       });
     } catch (e) {
@@ -524,6 +581,21 @@ export function v1Route<
       return finish(errorResponse(E.internal(), requestId), "INTERNAL");
     }
   };
+}
+
+/** The answer against its contract, in development and tests (validateResponses). */
+function checkContract(value: unknown, requestId: string, responseSchema: z.ZodType | undefined): void {
+  if (!responseSchema || !validateResponses) return;
+  const check = responseSchema.safeParse(value);
+  if (check.success) return;
+  console.error(
+    JSON.stringify({
+      at: "v1.contract",
+      requestId,
+      issues: check.error.issues.map((i) => ({ path: i.path.join("."), code: i.code, message: i.message })),
+    }),
+  );
+  throw new V1Error(500, "CONTRACT_VIOLATION", "Something went wrong on our side. Try again in a moment.", true);
 }
 
 /**
@@ -536,6 +608,7 @@ async function respond<T>(
   org: OrgContext | null,
   recordId: string | null,
   responseSchema: z.ZodType | undefined,
+  replay?: ReplayOptions,
 ): Promise<Response> {
   if (!result.ok) {
     const err = failureToError(result);
@@ -547,22 +620,20 @@ async function respond<T>(
   }
 
   const status = ("status" in result && result.status) || 200;
-  if (responseSchema && validateResponses) {
-    const check = responseSchema.safeParse(result.value);
-    if (!check.success) {
-      console.error(
-        JSON.stringify({
-          at: "v1.contract",
-          requestId,
-          issues: check.error.issues.map((i) => ({ path: i.path.join("."), code: i.code, message: i.message })),
-        }),
-      );
-      if (recordId) await releaseKey(recordId);
-      throw new V1Error(500, "CONTRACT_VIOLATION", "Something went wrong on our side. Try again in a moment.", true);
-    }
+  try {
+    checkContract(result.value, requestId, responseSchema);
+  } catch (e) {
+    if (recordId) await releaseKey(recordId);
+    throw e;
   }
 
-  if (recordId) await completeKey(recordId, status, result.value);
+  if (recordId) {
+    await completeKey(
+      recordId,
+      status,
+      replay ? { [REPLAY_REF]: replay.ref(result.value as never) } : result.value,
+    );
+  }
 
   const effects = result.effects ?? [];
   if (effects.length > 0) after(() => flushEffects(org, effects));
@@ -590,17 +661,6 @@ async function whyNoSession(req: Request, org: OrgContext): Promise<V1Error> {
     console.error("v1 session diagnosis", e);
   }
   return E.unauthenticated();
-}
-
-/**
- * Record this request as the session's latest (API_V1.md §6), at most every
- * few seconds so a busy screen doesn't write on every call.
- */
-async function touchSession(row: { id: string; lastRequestAt: Date | null }, now: Date): Promise<void> {
-  if (row.lastRequestAt && now.getTime() - row.lastRequestAt.getTime() < 5_000) return;
-  await db.session
-    .updateMany({ where: { id: row.id }, data: { lastRequestAt: now } })
-    .catch((e) => console.error("v1 session touch", e));
 }
 
 /**

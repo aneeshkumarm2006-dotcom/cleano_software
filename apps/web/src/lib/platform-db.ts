@@ -12,27 +12,11 @@
  * Never import this into tenant-facing code. Tenant code uses @/lib/org-db,
  * which cannot leave its organization.
  */
-import { PrismaClient } from "@prisma/client";
-
 import { getCachedSession } from "@/lib/auth";
 import { db as tenantScopedDb } from "@/lib/org-db";
+import { platformDb } from "@/lib/platform-client";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __platformDb: PrismaClient | undefined;
-}
-
-function make(): PrismaClient {
-  // Falls back to DATABASE_URL so local development works without extra setup.
-  // In a deployed environment PLATFORM_DATABASE_URL is the elevated connection
-  // and DATABASE_URL is the restricted one; if they are the same, the console
-  // simply sees nothing rather than seeing everything.
-  const url = process.env.PLATFORM_DATABASE_URL || process.env.DATABASE_URL;
-  return new PrismaClient({ datasources: { db: { url } } });
-}
-
-export const platformDb: PrismaClient =
-  global.__platformDb ?? (global.__platformDb = make());
+export { platformDb };
 
 export type PlatformStaff = {
   id: string;

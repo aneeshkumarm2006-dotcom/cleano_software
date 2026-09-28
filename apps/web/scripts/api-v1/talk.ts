@@ -196,6 +196,19 @@ export async function runTalkChecks(t: TalkHarness): Promise<void> {
     const ed = await send("PATCH", path, cleaner, ee);
     const ed2 = await send("PATCH", path, cleaner, ee);
     check("team edit: body and editedAt change, createdAt doesn't; replay is the same", ed.status === 200 && ed.body?.body === ee.body && !!ed.body?.editedAt && ed.body?.createdAt === r.body?.createdAt && ed2.body?.editedAt === ed.body?.editedAt, { ed: ed.body, ed2: ed2.body });
+    const history = await db.groupMessageEdit.findMany({ where: { messageId: mid } });
+    check(
+      "team edit: the replaced body is kept once, for moderators (a replay adds nothing)",
+      history.length === 1 && history[0]?.previousBody === r.body?.body && history[0]?.editedById === F.users.cleaner.id && history[0]?.organizationId === F.orgA.id,
+      history,
+    );
+    const afterEdit = await get(`/api/v1/team/channels/${defaultId}/messages`, teammate);
+    const served = afterEdit.body?.items?.find((m: { id: string }) => m.id === mid);
+    check(
+      "team edit: nobody is served the old body or the history",
+      served?.body === ee.body && !JSON.stringify(afterEdit.body).includes("previousBody") && !JSON.stringify(ed.body).includes("previousBody"),
+      served,
+    );
     const reuse = await send("PATCH", path, cleaner, { ...ee, body: "different" });
     check("team edit: the same key with another body is 422", reuse.status === 422, reuse.body);
     const edEmpty = await send("PATCH", path, cleaner, { body: " ", clientEventId: randomUUID() });

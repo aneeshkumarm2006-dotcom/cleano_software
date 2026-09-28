@@ -50,10 +50,34 @@ async function unusableWorkspace(): Promise<Response | null> {
   );
 }
 
+/**
+ * Endpoints this product never uses, answered 404 before anything else runs.
+ *
+ * `expo-authorization-proxy` (from @better-auth/expo) is an open redirect that
+ * also sets an attacker-chosen `oauth_state` cookie; there is no OAuth sign-in
+ * here to need it. `disabledPaths` in lib/auth.ts refuses it as well; this is
+ * the belt to that brace, and it also catches case and encoding variants.
+ */
+const REFUSED_AUTH_PATHS = ["expo-authorization-proxy"];
+
+function isRefusedAuthPath(url: string): boolean {
+  let path: string;
+  try {
+    path = decodeURIComponent(new URL(url).pathname).toLowerCase();
+  } catch {
+    return true;
+  }
+  return REFUSED_AUTH_PATHS.some((p) => path.includes(p));
+}
+
+const notFound = () => new Response("Not Found", { status: 404 });
+
 export async function POST(req: Request): Promise<Response> {
+  if (isRefusedAuthPath(req.url)) return notFound();
   return (await unusableWorkspace()) ?? handler.POST(req);
 }
 
 export async function GET(req: Request): Promise<Response> {
+  if (isRefusedAuthPath(req.url)) return notFound();
   return (await unusableWorkspace()) ?? handler.GET(req);
 }

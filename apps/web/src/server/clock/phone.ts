@@ -51,6 +51,7 @@ import { effect, type Effect } from "../effects";
 import { plannedMinutesOf } from "../jobs/detail";
 import { myClocks } from "../jobs/summary";
 import { failure, notFound, ok, type Failure, type Result } from "../result";
+import { recentActivity } from "../v1/activity";
 import { endBreakService, startBreakService } from "./breaks";
 import { clockInService, reportClockInCrash } from "./clock-in";
 import { clockOutService } from "./clock-out";
@@ -63,8 +64,24 @@ export interface PhoneEventContext {
   actor: Actor;
   jobId: string;
   receivedAt: Date;
-  /** The session's previous authenticated request (§6: disproves "offline"). */
-  lastRequestAt: Date | null;
+  /** When the sending session was created (§6: a session newer than the tap disproves "offline"). */
+  sessionCreatedAt: Date;
+  /** The seconds this person made requests in, recently (§6: disproves "offline"). */
+  activeSeconds: readonly Date[];
+}
+
+/** The context for a clock event, with the person's recent activity read. */
+export async function phoneEventContext(
+  ctx: { actor: Actor; receivedAt: Date; session: { createdAt: Date } },
+  jobId: string,
+): Promise<PhoneEventContext> {
+  return {
+    actor: ctx.actor,
+    jobId,
+    receivedAt: ctx.receivedAt,
+    sessionCreatedAt: ctx.session.createdAt,
+    activeSeconds: await recentActivity(ctx.actor.organizationId, ctx.actor.userId, ctx.receivedAt),
+  };
 }
 
 interface JobForClock {
@@ -257,7 +274,12 @@ interface Applied {
 }
 
 function applyTime(ctx: PhoneEventContext, occurredAt: Date, notBefore: Date | null): Applied {
-  const decision = decideEventTime({ occurredAt, receivedAt: ctx.receivedAt, lastRequestAt: ctx.lastRequestAt });
+  const decision = decideEventTime({
+    occurredAt,
+    receivedAt: ctx.receivedAt,
+    activeSeconds: ctx.activeSeconds,
+    sessionCreatedAt: ctx.sessionCreatedAt,
+  });
   let at = decision.appliedAt;
   let review = decision.kind === "RECEIVED" && decision.review;
   let why: Applied["why"] =

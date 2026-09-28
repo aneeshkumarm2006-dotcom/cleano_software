@@ -423,7 +423,13 @@ out, breaks, withdrawals):
   - a retry returns the stored response and fires no effects;
   - the same key with a different method, path or body answers 422;
   - a key still in flight answers 409, `retryable: true`.
-- Records are kept at least as long as the correction window.
+- Records are kept at least as long as the correction window (30 days), then
+  deleted by the daily `/api/cron/api-retention` cron (CRON_SECRET, like the
+  other crons; registered in `apps/web/vercel.json`).
+- Sensitive answers aren't copied into the record: document signing (short-
+  lived signed links) and withdrawals (money) store only
+  `{"$replayRef": {id}}`, and a replay rebuilds the answer from current data
+  (`replay` in `v1Route`). Everything else stores its answer.
 - Server actions don't use it. The web has no offline queue, and a double
   submit is covered by the unique open-session index.
 
@@ -432,11 +438,24 @@ out, breaks, withdrawals):
 The server stores both times, `occurredAt` from the phone and `receivedAt` from
 itself, and decides which to trust:
 
-1. **Offline must be provable.** The server records the last authenticated
-   request on each session. If the phone made any successful call between
-   `occurredAt` and `receivedAt`, it wasn't offline, and the claimed time is
-   disproven. The event is applied at `receivedAt`, and a correction request
-   with the claimed time goes to the office.
+1. **Offline must be provable.** The server records, per person, every
+   second in which they made an authenticated `/api/v1` request, on any
+   session (`UserRequestActivity`: one row per person per minute holding a
+   60-bit map of its seconds, kept ~15 minutes, pruned by the wrapper and the
+   daily retention cron). The claim is disproven, the event applied at
+   `receivedAt`, and a correction request with the claimed time sent to the
+   office, when either:
+   - any request falls wholly between `occurredAt + 1 s` and
+     `receivedAt − 30 s` (the reconnect grace: the refresh and outbox drain
+     the moment signal returns are not evidence); or
+   - the session sending the event was created after `occurredAt` (the phone
+     signed in, so it was online, after the tap).
+
+   This replaced `Session.lastRequestAt`, which held only the session's
+   latest request: any request inside the grace overwrote the evidence, and a
+   fresh sign-in had none. The rule is `decideEventTime` in
+   `packages/core/src/time/offline-clock.ts` (pure; cases in
+   `apps/web/scripts/verify-api-v1-rules.ts`).
 2. **A small gap is applied as is.** If `receivedAt − occurredAt` is under
    five minutes, which covers normal lag and short dead spots, the event
    applies at `occurredAt`.
@@ -489,7 +508,9 @@ can't judge a backdated event. In v1, idempotency-key replay replaces it.
 - the one-open-session partial unique index;
 - `receivedAt` and `clientEventId` on `JobWorkSession` and `JobBreak`, for
   audit;
-- the per-session last-request time.
+- ~~the per-session last-request time~~ superseded by per-person request
+  activity (`UserRequestActivity`, migration
+  `20260928100000_api_hardening_request_activity`).
 
 > **Decision — offline times beyond five minutes.** Under the rules above, a
 > gap over five minutes with offline proven is applied at server time, and the

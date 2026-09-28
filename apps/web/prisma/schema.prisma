@@ -119,6 +119,7 @@ model User {
   // Mobile API v1 (docs/architecture/API_V1.md §6, §7).
   idempotencyRecords           IdempotencyRecord[]
   pushDevices                  PushDevice[]
+  requestActivity              UserRequestActivity[]
   mediaUploads                 MediaUpload[]
 
   @@unique([organizationId, email])
@@ -153,13 +154,13 @@ model Session {
   token         String    @unique
   updatedAt     DateTime  @updatedAt
   userAgent     String?
-  /// When this session last made an authenticated /api/v1 request (API_V1.md
-  /// §6). An offline clock event claims "I had no signal from occurredAt
-  /// until now"; a successful request in between disproves it. Written only
-  /// by the v1 wrapper, at most every few seconds. better-auth neither reads
-  /// nor writes it.
+  /// No longer written or read. It held only a session's LATEST request, so
+  /// a request inside the reconnect grace erased the evidence; the offline
+  /// clock now reads UserRequestActivity (API_V1.md §6). Left in place: the
+  /// migrations here are additive.
   lastRequestAt DateTime?
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushDevices   PushDevice[]
 }
 
 model Verification {
@@ -2282,6 +2283,8 @@ model GroupMessage {
   clientEventId  String?
   createdAt      DateTime     @default(now())
   channel        GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  // What each edit replaced. Moderators only; never served to anyone else.
+  edits          GroupMessageEdit[]
 
   @@unique([organizationId, senderId, clientEventId])
   @@index([channelId, createdAt])
@@ -3396,13 +3399,18 @@ model PushDevice {
   /// ios | android
   platform       String
   appVersion     String
+  /// The session that registered it. Deleting the session (sign-out,
+  /// revocation, reset) deletes this row. Null for rows from before it.
+  sessionId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session        Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, token])
   @@index([userId])
   @@index([organizationId])
+  @@index([sessionId])
 }
 
 model JobAssignmentInvite {
@@ -4499,5 +4507,59 @@ model MediaUpload {
   @@unique([organizationId, publicId])
   @@index([organizationId, userId, createdAt])
   @@index([jobId])
+  @@index([organizationId])
+}
+
+/// Which seconds a person made authenticated /api/v1 requests in, for the
+/// last few minutes (API_V1.md §6). An offline clock event claims "no signal
+/// from occurredAt until now"; any request in between, on any of the
+/// person's sessions, disproves it. One row per person per minute; written
+/// by the v1 wrapper with raw SQL (an atomic OR into `seconds`) and pruned
+/// after ACTIVITY_RETENTION_MS by the wrapper and the daily retention cron.
+model UserRequestActivity {
+  organizationId String @default("")
+  userId         String
+  /// Minutes since the Unix epoch (UTC): no time zone to get wrong.
+  minute         Int
+  /// Bit i set: at least one request during second i of that minute.
+  seconds        BigInt @default(0)
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId, minute])
+  @@index([minute])
+  @@index([userId])
+}
+
+/// Shared fixed-window rate limit counters (src/lib/shared-rate-limit.ts).
+/// NOT a tenant table: per-email / per-address limits on the platform host
+/// and better-auth's sign-in counters span companies. RLS forced with no
+/// policy and no awer_app grant; reached only through the platform client.
+/// `key` is an HMAC digest, never a raw email or address.
+model RateLimitCounter {
+  key         String @id
+  count       Int    @default(0)
+  /// Epoch ms: the window's start, or better-auth's last request.
+  windowStart BigInt
+  /// Epoch ms.
+  expiresAt   BigInt
+
+  @@index([expiresAt])
+}
+
+/// One edit of a team-chat message: the body it replaced, when, and by whom
+/// (the sender; only senders edit). Written before the edit, in the same
+/// transaction. Readable by the office's moderators only
+/// (server/messages/team-chat.ts teamMessageEditsFor); never returned to
+/// anyone else. Insert-only for the app role.
+model GroupMessageEdit {
+  organizationId String       @default("")
+  id             String       @id @default(cuid())
+  messageId      String
+  previousBody   String       @db.Text
+  editedAt       DateTime
+  editedById     String
+  message        GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, editedAt])
   @@index([organizationId])
 }

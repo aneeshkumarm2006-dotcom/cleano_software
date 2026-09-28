@@ -9,7 +9,9 @@
 // Three layers now make "switched off" true everywhere:
 //   1. customSession (auth.ts) treats a switched-off person as signed out;
 //   2. the session-create hook (auth.ts) refuses them a new session;
-//   3. this module deletes the sessions they already hold.
+//   3. this module deletes the sessions they already hold, and the push
+//      tokens registered under them (PushDevice): a phone that can't sign in
+//      shouldn't go on receiving the company's notifications.
 import "server-only";
 
 import { db } from "@/lib/org-db";
@@ -40,8 +42,12 @@ export async function endSessionsOfSwitchedOffUsers(
   });
   if (switchedOff.length === 0) return 0;
 
+  const ids = switchedOff.map((u) => u.id);
+  // Tokens first: a row whose session goes also goes by cascade, but rows
+  // registered before sessions were recorded on them (sessionId null) don't.
+  await db.pushDevice.deleteMany({ where: { userId: { in: ids } } });
   const res = await db.session.deleteMany({
-    where: { userId: { in: switchedOff.map((u) => u.id) } },
+    where: { userId: { in: ids } },
   });
   return res.count;
 }
@@ -57,6 +63,15 @@ export async function endOtherSessions(userId: string, keepToken: string): Promi
   const person = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!person) return 0;
 
+  // Every push token but the ones this session registered.
+  const keep = await db.session.findUnique({ where: { token: keepToken }, select: { id: true, userId: true } });
+  const keepId = keep && keep.userId === person.id ? keep.id : null;
+  await db.pushDevice.deleteMany({
+    where: {
+      userId: person.id,
+      ...(keepId ? { OR: [{ sessionId: null }, { sessionId: { not: keepId } }] } : {}),
+    },
+  });
   const res = await db.session.deleteMany({
     where: { userId: person.id, NOT: { token: keepToken } },
   });
@@ -74,6 +89,18 @@ export async function endAllSessionsOf(userId: string): Promise<number> {
   const person = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!person) return 0;
 
+  await db.pushDevice.deleteMany({ where: { userId: person.id } });
   const res = await db.session.deleteMany({ where: { userId: person.id } });
+  return res.count;
+}
+
+/**
+ * Delete every push token this person registered, on every session. For a
+ * completed password reset: better-auth ends their sessions itself (and the
+ * tokens under them by cascade); this catches rows from before tokens were
+ * tied to a session.
+ */
+export async function endPushDevicesOf(userId: string): Promise<number> {
+  const res = await db.pushDevice.deleteMany({ where: { userId } });
   return res.count;
 }

@@ -14,6 +14,7 @@ import "server-only";
 import { hashPassword, verifyPassword } from "better-auth/crypto";
 
 import { platformDb } from "@/lib/platform-db";
+import { sharedLimitHit } from "@/lib/shared-rate-limit";
 import { originForSlug, PLATFORM_ORG_SLUG } from "@/lib/tenant";
 
 export interface DiscoveredWorkspace {
@@ -31,14 +32,18 @@ export type DiscoveryOutcome =
 /**
  * Attempts per address, and per email, per window.
  *
- * KNOWN LIMIT, stated rather than implied: in memory, so per instance, and
- * Vercel runs several. It raises the cost of guessing without ending it. The
- * shared-store limit API_V1.md §2 asks for, and the WAF rule in front of it,
- * are still to do.
+ * Two layers. In memory first, per instance: free, and stops a burst before
+ * it costs a query. Then the same limits counted in Postgres across every
+ * instance (lib/shared-rate-limit.ts; emails and addresses are stored only as
+ * keyed digests), plus a slower per-email hourly cap, so spreading guesses
+ * over Vercel's instances or over time doesn't multiply them. A Vercel WAF
+ * rule in front of /api/v1/auth/* is still recommended (owner action).
  */
 const ATTEMPTS = new Map<string, { n: number; resetAt: number }>();
 const WINDOW_MS = 60_000;
 const MAX_ATTEMPTS = 8;
+/** Per email per hour, shared: a slow, patient guesser. */
+const EMAIL_HOURLY = { max: 40, windowMs: 60 * 60_000 };
 
 function rateLimited(key: string): boolean {
   const now = Date.now();
@@ -54,6 +59,25 @@ function rateLimited(key: string): boolean {
   }
   hit.n += 1;
   return hit.n > MAX_ATTEMPTS;
+}
+
+/**
+ * The shared layer. Fails closed: if the counters can't be reached, the
+ * attempt is refused as limited rather than let through unmetered.
+ */
+async function sharedLimited(ip: string, email: string): Promise<boolean> {
+  try {
+    const window = { max: MAX_ATTEMPTS, windowMs: WINDOW_MS };
+    const [byIp, byEmail, byEmailHour] = await Promise.all([
+      sharedLimitHit("discover:ip", ip, window),
+      sharedLimitHit("discover:email", email, window),
+      sharedLimitHit("discover:email:hour", email, EMAIL_HOURLY),
+    ]);
+    return byIp || byEmail || byEmailHour;
+  } catch (e) {
+    console.error(JSON.stringify({ at: "discover.shared-limit", error: String(e).slice(0, 200) }));
+    return true;
+  }
 }
 
 /**
@@ -91,6 +115,7 @@ export async function discoverWorkspacesFor(
   if (rateLimited(`ip:${ip}`) || rateLimited(`email:${email}`)) {
     return { kind: "limited" };
   }
+  if (await sharedLimited(ip, email)) return { kind: "limited" };
 
   // A suspended or cancelled workspace is left out here rather than refused
   // later, so "your company stopped paying" is not distinguishable from "wrong

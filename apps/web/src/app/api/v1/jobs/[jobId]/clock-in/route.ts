@@ -3,7 +3,7 @@
 // server/clock/phone.ts (API_V1.md §6).
 import { ClockEvent, ClockStateResponse } from "@bookmops/api/v1";
 
-import { phoneClockIn } from "@/server/clock/phone";
+import { phoneClockIn, phoneEventContext } from "@/server/clock/phone";
 import { CLOCK_EVENT_LIMIT, pathId, v1Route } from "@/server/v1/route";
 
 export const dynamic = "force-dynamic";
@@ -17,14 +17,9 @@ export const POST = v1Route(
     idempotent: true,
     limit: CLOCK_EVENT_LIMIT,
   },
-  (ctx) =>
+  async (ctx) =>
     phoneClockIn(
-      {
-        actor: ctx.actor,
-        jobId: pathId(ctx.params.jobId),
-        receivedAt: ctx.receivedAt,
-        lastRequestAt: ctx.session.lastRequestAt,
-      },
+      await phoneEventContext(ctx, pathId(ctx.params.jobId)),
       ctx.body,
     ),
 );
