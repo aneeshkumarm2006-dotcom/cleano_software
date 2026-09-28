@@ -17,12 +17,15 @@ import { deleteExpiredRateLimits } from "@/lib/shared-rate-limit";
  *                        the v1 wrapper prunes each person as they come back,
  *                        this catches everyone who doesn't.
  *   RateLimitCounter     past its window.
+ *   PushJobReminder      sent over 30 days ago (its job has long started).
  *
  * Deletes only by age, across every company, so it runs on the platform
  * client like the subscriptions cron. It reads nothing and returns counts.
  *
  * vercel.json: { "path": "/api/cron/api-retention", "schedule": "30 8 * * *" }
  */
+const PUSH_REMINDER_KEEP_MS = 30 * 24 * 60 * 60_000;
+
 export async function GET(req: NextRequest) {
   if (!isAuthorizedCron(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -52,6 +55,11 @@ export async function GET(req: NextRequest) {
     return res.count;
   });
   await step("rateLimits", () => deleteExpiredRateLimits(now.getTime()));
+  // A one-hour reminder's marker only matters until its job has started.
+  await step("pushReminders", async () => {
+    const res = await platformDb.pushJobReminder.deleteMany({ where: { sentAt: { lt: new Date(now.getTime() - PUSH_REMINDER_KEEP_MS) } } });
+    return res.count;
+  });
 
   console.log(JSON.stringify({ at: "cron.api-retention", ...counts }));
   return NextResponse.json({ ok: !failed, deleted: counts }, { status: failed ? 500 : 200 });

@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/api-retention",
       "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/job-reminders",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
