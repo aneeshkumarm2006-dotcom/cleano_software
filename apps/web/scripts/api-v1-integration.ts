@@ -23,6 +23,7 @@ import { createFixture, openDb, PASSWORD, removeFixture, SLUG_A, SLUG_B, type Fi
 import { runTalkChecks } from "./api-v1/talk";
 import { recordChecks } from "./api-v1/record";
 import { mediaChecks } from "./api-v1/media";
+import { managerChecks } from "./api-v1/manager";
 
 const PORT = Number(process.env.V1_PORT ?? 3100);
 const APEX = `localhost:${PORT}`;
@@ -675,6 +676,7 @@ async function main() {
 
     // ── Record: training, documents, strikes (./api-v1/record.ts) ─────────
     await recordChecks({ db, fx: F, hostA: HOST_A, hostB: HOST_B, cookie, call, check, signIn });
+    await managerChecks({ db, F, HOST_A, HOST_B, call, check, signIn: (h, e) => signIn(h, e) });
   } finally {
     if (fx && !KEEP) {
       await removeFixture(db).catch((e) => console.error("cleanup failed:", e));
