@@ -384,6 +384,12 @@ async function ownMessage(actor: Actor, channelId: string, messageId: string) {
  * Edit the caller's own message: sets the body and editedAt, and nothing else
  * (not the sender, the time it was sent, or anyone's read cursor). A deleted
  * message can't be edited.
+ *
+ * The body being replaced is written to GroupMessageEdit first, in the same
+ * transaction and under a lock on the message row, so concurrent edits each
+ * record exactly the text they replaced. That history is for moderators only
+ * (teamMessageEditsFor) and is never returned by anything else. There is no
+ * time limit on editing (the owner hasn't decided one).
  */
 export async function editTeamMessage(
   actor: Actor,
@@ -399,13 +405,31 @@ export async function editTeamMessage(
   if (!message) return notFound(MESSAGE_NOT_FOUND);
   if (message.deletedAt) return failure(409, "MESSAGE_DELETED", "This message was deleted, so it can't be edited.");
 
+  const organizationId = await requireOrgId();
   // Conditional on still being the sender's and not deleted, so an edit
   // racing a delete can't bring text back onto a deleted message.
-  const updated = await db.groupMessage.updateMany({
-    where: { id: message.id, channelId: channel.id, senderId: actor.userId, deletedAt: null },
-    data: { body: body.text, editedAt: input.now },
+  const applied = await db.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ body: string }[]>`
+      SELECT "body" FROM "GroupMessage"
+      WHERE "id" = ${message.id}
+        AND "organizationId" = ${organizationId}
+        AND "channelId" = ${channel.id}
+        AND "senderId" = ${actor.userId}
+        AND "deletedAt" IS NULL
+      FOR UPDATE`;
+    const current = locked[0];
+    if (!current) return false;
+    await tx.groupMessageEdit.create({
+      data: { messageId: message.id, previousBody: current.body, editedAt: input.now, editedById: actor.userId },
+      select: { id: true },
+    });
+    const updated = await tx.groupMessage.updateMany({
+      where: { id: message.id, channelId: channel.id, senderId: actor.userId, deletedAt: null },
+      data: { body: body.text, editedAt: input.now },
+    });
+    return updated.count === 1;
   });
-  if (updated.count === 0) {
+  if (!applied) {
     const now = await ownMessage(actor, channel.id, message.id);
     if (!now) return notFound(MESSAGE_NOT_FOUND);
     return failure(409, "MESSAGE_DELETED", "This message was deleted, so it can't be edited.");
@@ -413,6 +437,43 @@ export async function editTeamMessage(
   const row = await ownMessage(actor, channel.id, message.id);
   if (!row) return notFound(MESSAGE_NOT_FOUND);
   return ok(toTeamMessage(row, actor));
+}
+
+export interface TeamMessageEditView {
+  previousBody: string;
+  editedAt: string;
+  editedById: string;
+}
+
+/**
+ * A message's edit history, oldest first: what each edit replaced. For the
+ * office's moderators (OWNER, ADMIN, OPS_MANAGER) only; anyone else, the
+ * sender included, gets the same 404 as a message that doesn't exist, so the
+ * history's existence isn't revealed either. Deleted messages keep their
+ * history for moderation.
+ */
+export async function teamMessageEditsFor(
+  actor: Actor,
+  channelId: string,
+  messageId: string,
+): Promise<Result<TeamMessageEditView[]>> {
+  if (!isModerator(actor.role)) return notFound(MESSAGE_NOT_FOUND);
+  const channel = await accessibleChannel(actor, channelId);
+  if (!channel) return notFound(CHANNEL_NOT_FOUND);
+  if (typeof messageId !== "string" || !messageId) return notFound(MESSAGE_NOT_FOUND);
+  const message = await db.groupMessage.findFirst({
+    where: { id: messageId, channelId: channel.id },
+    select: { id: true },
+  });
+  if (!message) return notFound(MESSAGE_NOT_FOUND);
+  const edits = await db.groupMessageEdit.findMany({
+    where: { messageId: message.id },
+    orderBy: [{ editedAt: "asc" }, { id: "asc" }],
+    select: { previousBody: true, editedAt: true, editedById: true },
+  });
+  return ok(
+    edits.map((e) => ({ previousBody: e.previousBody, editedAt: e.editedAt.toISOString(), editedById: e.editedById })),
+  );
 }
 
 /**

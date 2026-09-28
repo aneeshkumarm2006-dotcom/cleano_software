@@ -2282,6 +2282,8 @@ model GroupMessage {
   clientEventId  String?
   createdAt      DateTime     @default(now())
   channel        GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  // What each edit replaced. Moderators only; never served to anyone else.
+  edits          GroupMessageEdit[]
 
   @@unique([organizationId, senderId, clientEventId])
   @@index([channelId, createdAt])
@@ -4536,4 +4538,22 @@ model RateLimitCounter {
   expiresAt   BigInt
 
   @@index([expiresAt])
+}
+
+/// One edit of a team-chat message: the body it replaced, when, and by whom
+/// (the sender; only senders edit). Written before the edit, in the same
+/// transaction. Readable by the office's moderators only
+/// (server/messages/team-chat.ts teamMessageEditsFor); never returned to
+/// anyone else. Insert-only for the app role.
+model GroupMessageEdit {
+  organizationId String       @default("")
+  id             String       @id @default(cuid())
+  messageId      String
+  previousBody   String       @db.Text
+  editedAt       DateTime
+  editedById     String
+  message        GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, editedAt])
+  @@index([organizationId])
 }
