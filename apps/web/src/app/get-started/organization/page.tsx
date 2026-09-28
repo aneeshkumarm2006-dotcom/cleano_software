@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
-import AwerLogo from "@/components/AwerLogo";
+import BookmopsLogo from "@/components/BookmopsLogo";
 import { PLANS } from "@/lib/plans";
 
 import RequestForm from "./RequestForm";
@@ -30,7 +30,7 @@ export default function OrganizationRequestPage() {
       // cleaning company's customer count. /admin-login.png is TeamCleano's
       // branded shot -- polo shirt and framed logo -- and belongs on their
       // workspace, not on the page where their competitors sign up.
-      logo={<AwerLogo onDark />}
+      logo={<BookmopsLogo onDark />}
       footNote={null}
       image={BRAND_IMAGES.home}
       quoteHtml={"Bigger operations<br/>need a <em>real<br/>conversation.</em>"}

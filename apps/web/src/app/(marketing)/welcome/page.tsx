@@ -24,6 +24,7 @@ import {
 
 import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 
+import { BookmopsWordmark } from "@/components/BookmopsLogo";
 import Reveal from "./Reveal";
 import Showcase from "./Showcase";
 import { InventorySurface, PayrollSurface, ReportsSurface } from "./Surfaces";
@@ -277,17 +278,6 @@ const REVEAL_FAILSAFE = `(function(){try{setTimeout(function(){if(window.__mkRev
 /** The same override for a visitor with JavaScript switched off entirely. */
 const REVEAL_NOSCRIPT = ".mk [data-reveal]{opacity:1!important;transform:none!important}";
 
-function Mark({ size = 30 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" className="mk-mark">
-      <rect width="32" height="32" rx="9" fill="currentColor" />
-      <rect x="7.5" y="9" width="17" height="3.1" rx="1.55" fill="#fff" />
-      <rect x="7.5" y="14.45" width="12" height="3.1" rx="1.55" fill="#fff" opacity=".72" />
-      <rect x="7.5" y="19.9" width="7.5" height="3.1" rx="1.55" fill="#fff" opacity=".46" />
-    </svg>
-  );
-}
-
 export default function WelcomePage() {
   return (
     <div className={`mk ${archivo.variable}`}>
@@ -313,8 +303,7 @@ export default function WelcomePage() {
       <header className="mk-nav">
         <div className="mk-wrap mk-nav-in">
           <Link href="/" className="mk-logo" aria-label="Bookmops home">
-            <Mark />
-            Bookmops
+            <BookmopsWordmark height={36} />
           </Link>
           <nav className="mk-nav-links" aria-label="Sections">
             <a href="#showcase">Product</a>
@@ -783,8 +772,7 @@ export default function WelcomePage() {
         <div className="mk-wrap mk-foot-grid">
           <div className="mk-foot-brand">
             <Link href="/" className="mk-logo" aria-label="Bookmops home">
-              <Mark size={26} />
-              Bookmops
+              <BookmopsWordmark height={32} />
             </Link>
             <p>Scheduling, crew, customers, invoicing and payroll for cleaning companies.</p>
           </div>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BookmopsSymbol } from "@/components/BookmopsLogo";
 
 type Item = {
   href: string;
@@ -160,7 +161,7 @@ export default function ConsoleRail({
   return (
     <nav className="rail" aria-label="Console">
       <div className="brandmark">
-        <div className="dot">A</div>
+        <BookmopsSymbol height={22} />
         <div>
           <b>Bookmops</b>
           <span>Console</span>

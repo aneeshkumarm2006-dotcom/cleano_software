@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { OrgPlan } from "@prisma/client";
 
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
-import AwerLogo from "@/components/AwerLogo";
+import BookmopsLogo from "@/components/BookmopsLogo";
 import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 
 import SignupForm, { type PlanCard } from "./SignupForm";
@@ -60,7 +60,7 @@ export default async function GetStartedPage({
       // cleaning company's customer count. /admin-login.png is TeamCleano's
       // branded shot -- polo shirt and framed logo -- and belongs on their
       // workspace, not on the page where their competitors sign up.
-      logo={<AwerLogo onDark />}
+      logo={<BookmopsLogo onDark />}
       footNote={null}
       image={BRAND_IMAGES.home}
       quoteHtml={"Every job, every<br/>cleaner, <em>one<br/>place.</em>"}

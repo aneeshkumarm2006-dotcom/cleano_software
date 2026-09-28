@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
-import AwerLogo from "@/components/AwerLogo";
+import BookmopsLogo from "@/components/BookmopsLogo";
 import CleanoLoader from "@/components/ui/CleanoLoader";
 import {
   Field,
@@ -111,7 +111,7 @@ function SignInInner({ isPlatform }: { isPlatform: boolean }) {
       // Bookmops' door, and must not wear a customer's logo, photo or customer
       // count -- /admin-login.png is TeamCleano's branded shot, and the foot
       // note is their marketing.
-      logo={isPlatform ? <AwerLogo onDark /> : undefined}
+      logo={isPlatform ? <BookmopsLogo onDark /> : undefined}
       image={isPlatform ? BRAND_IMAGES.home : "/admin-login.png"}
       quoteHtml={
         isPlatform

@@ -4,7 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
 
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
-import AwerLogo from "@/components/AwerLogo";
+import BookmopsLogo from "@/components/BookmopsLogo";
 import { Field, Input, PasswordInput, Button, Banner } from "@/components/customer/Field";
 
 import { discoverWorkspaces, type DiscoveredWorkspace } from "./discover";
@@ -95,7 +95,7 @@ export default function PlatformSignIn() {
 
   return (
     <SplitShell
-      logo={<AwerLogo onDark />}
+      logo={<BookmopsLogo onDark />}
       footNote={null}
       image={BRAND_IMAGES.home}
       quoteHtml={"Software for<br/><em>cleaning<br/>companies.</em>"}

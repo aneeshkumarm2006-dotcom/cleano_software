@@ -215,13 +215,12 @@
   text-decoration: none;
   margin-right: auto;
 }
-.mk-mark {
-  color: var(--mk-teal);
-  flex: none;
-  display: block;
+/* The wordmark image (components/BookmopsLogo). */
+.mk-logo img {
+  transform-origin: left center;
   transition: transform 220ms var(--e-out);
 }
-.mk-nav.is-stuck .mk-mark { transform: scale(0.94); }
+.mk-nav.is-stuck .mk-logo img { transform: scale(0.94); }
 
 .mk-nav-links { display: none; gap: var(--mk-s3); }
 .mk-nav-links a {
