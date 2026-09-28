@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 const PageQuery = z.object({ cursor: z.string().max(512).optional() });
 
 /** Each request emails the cleaner and the office (API_V1.md §4). */
-const WITHDRAWAL_LIMIT = { name: "withdrawal", max: 5, windowMs: 60 * 60_000 };
+const WITHDRAWAL_LIMIT = { name: "withdrawal", max: 5, windowMs: 60 * 60_000, shared: true };
 
 export const GET = v1Route(
   { host: "tenant", access: "staff", query: PageQuery, response: WithdrawalsResponse },

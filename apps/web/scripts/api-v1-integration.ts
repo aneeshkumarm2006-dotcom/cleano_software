@@ -812,6 +812,23 @@ async function main() {
       check("me/password: every other session ends", theirs.status === 401, theirs.body);
     }
 
+    // ── Shared rate limit (lib/shared-rate-limit.ts) ──────────────────────
+    if (process.env.PLATFORM_DATABASE_URL && process.env.BETTER_AUTH_SECRET) {
+      const { sharedLimitHit } = await import("../src/lib/shared-rate-limit");
+      const subject = `probe-${randomUUID()}@example.com`;
+      const opts = { max: 2, windowMs: 60_000 };
+      const hits = [];
+      for (let i = 0; i < 3; i++) hits.push(await sharedLimitHit("v1test:probe", subject, opts));
+      check("shared limit: the third hit in a window is over a max of 2", JSON.stringify(hits) === "[false,false,true]", hits);
+      const raw = await db.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM "RateLimitCounter" WHERE "key" LIKE ${`%${subject}%`}`;
+      const hex = await db.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM "RateLimitCounter" WHERE "key" !~ '^[0-9a-f]{64}$'`;
+      check("shared limit: no raw subject is stored, every key is a digest", raw[0]?.n === 0 && hex[0]?.n === 0, { raw, hex });
+    } else {
+      console.log("SKIP  shared limit (PLATFORM_DATABASE_URL / BETTER_AUTH_SECRET not set)");
+    }
+
     // ── Record: training, documents, strikes (./api-v1/record.ts) ─────────
     await recordChecks({ db, fx: F, hostA: HOST_A, hostB: HOST_B, cookie, call, check, signIn });
   } finally {

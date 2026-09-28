@@ -17,6 +17,7 @@ import { auth } from "@/lib/auth";
 import { runAsOrg } from "@/lib/org-context";
 import { platformDb } from "@/lib/platform-db";
 import { rateLimitHit } from "@/lib/rate-limit";
+import { sharedLimitHit } from "@/lib/shared-rate-limit";
 import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
 
 import { effect, type Effect } from "../effects";
@@ -35,6 +36,18 @@ export async function forgotPasswordEffects(emailRaw: string, ip: string): Promi
   if (!email) return [];
   if (rateLimitHit("v1:forgot:ip", ip, PER_IP)) return [];
   if (rateLimitHit("v1:forgot:email", email, PER_EMAIL)) return [];
+  // The same limits across every instance (emails stored only as keyed
+  // digests). Fails closed: no counters, no email sent.
+  try {
+    const [byIp, byEmail] = await Promise.all([
+      sharedLimitHit("v1:forgot:ip", ip, PER_IP),
+      sharedLimitHit("v1:forgot:email", email, PER_EMAIL),
+    ]);
+    if (byIp || byEmail) return [];
+  } catch (e) {
+    console.error(JSON.stringify({ at: "v1.forgot.shared-limit", error: String(e).slice(0, 200) }));
+    return [];
+  }
 
   const orgs = await platformDb.organization.findMany({
     where: { status: "ACTIVE", slug: { not: PLATFORM_ORG_SLUG } },

@@ -14,7 +14,7 @@ export const POST = v1Route(
     access: "public",
     body: ForgotPasswordRequest,
     response: ForgotPasswordResponse,
-    ipLimit: { name: "forgot", max: 30, windowMs: 60_000 },
+    ipLimit: { name: "forgot", max: 30, windowMs: 60_000, shared: true },
   },
   async (ctx) => {
     const effects = await forgotPasswordEffects(ctx.body.email, ctx.ip).catch((e) => {

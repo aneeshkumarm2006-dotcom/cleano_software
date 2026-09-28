@@ -45,6 +45,7 @@ import { CrossTenantError } from "@/lib/db-scoped";
 import { db } from "@/lib/org-db";
 import { runAsOrg, type OrgContext } from "@/lib/org-context";
 import { rateLimitHit } from "@/lib/rate-limit";
+import { sharedLimitHit } from "@/lib/shared-rate-limit";
 import { orgSlugFromHost, PLATFORM_ORG_SLUG, publicHostFromHeaders } from "@/lib/tenant";
 
 import type { Actor } from "../actor";
@@ -63,8 +64,8 @@ import { appVersions, isBelow, parseVersion } from "./versions";
 /**
  * A cheap limit per address, before the database. Set with carrier NAT in
  * mind: a whole crew on one mobile address at shift start must not lock each
- * other out. Per instance, in memory (see lib/rate-limit.ts); the shared-store
- * limit the design asks for is an open item.
+ * other out. Per instance, in memory (see lib/rate-limit.ts); the endpoints
+ * where spreading across instances matters add `shared: true` to their limit.
  */
 const IP_LIMIT = { max: 600, windowMs: 60_000 };
 const USER_LIMIT = { max: 240, windowMs: 60_000 };
@@ -73,6 +74,18 @@ const MAX_BODY_BYTES = 64 * 1024;
 const MAX_BODY_BYTES_CEILING = 512 * 1024;
 
 // ── Types ───────────────────────────────────────────────────────────────────
+
+/**
+ * A limit by name. `shared: true` adds a second layer counted in Postgres
+ * across every instance (lib/shared-rate-limit.ts) behind the in-memory one,
+ * for the endpoints where `limit x instances` matters.
+ */
+export interface NamedLimit {
+  name: string;
+  max: number;
+  windowMs: number;
+  shared?: boolean;
+}
 
 export interface RouteOptions<B extends z.ZodType | undefined, Q extends z.ZodType | undefined> {
   /** tenant: a company's own address. platform: the front door; never reads a tenant. */
@@ -92,9 +105,9 @@ export interface RouteOptions<B extends z.ZodType | undefined, Q extends z.ZodTy
    * An extra per-person limit for an endpoint that costs something (API_V1.md
    * §4). Counted after idempotency, so a replayed key isn't counted again.
    */
-  limit?: { name: string; max: number; windowMs: number };
+  limit?: NamedLimit;
   /** An extra per-address limit for a platform endpoint, by name. */
-  ipLimit?: { name: string; max: number; windowMs: number };
+  ipLimit?: NamedLimit;
   /**
    * A larger body cap than the default 64 KB, for the one kind of request that
    * needs it (a drawn signature's strokes). Never above MAX_BODY_BYTES_CEILING.
@@ -222,6 +235,27 @@ function limitOrThrow(name: string, key: string, opts: { max: number; windowMs: 
   if (rateLimitHit(name, key, opts)) throw E.rateLimited(opts.windowMs / 1000);
 }
 
+/** The in-memory limit, then (for `shared`) the one every instance counts. */
+async function namedLimitOrThrow(name: string, key: string, opts: NamedLimit): Promise<void> {
+  limitOrThrow(name, key, opts);
+  if (opts.shared) await sharedLimitOrThrow(name, key, opts);
+}
+
+/**
+ * The shared layer. Fails closed: a store that can't be reached refuses the
+ * request as retryable, rather than letting an unmetered one through.
+ */
+export async function sharedLimitOrThrow(name: string, key: string, opts: { max: number; windowMs: number }): Promise<void> {
+  let over: boolean;
+  try {
+    over = await sharedLimitHit(name, key, opts);
+  } catch (e) {
+    console.error(JSON.stringify({ at: "v1.shared-limit", name, error: String(e).slice(0, 200) }));
+    throw E.internal();
+  }
+  if (over) throw E.rateLimited(opts.windowMs / 1000);
+}
+
 function queryObject(url: URL): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of url.searchParams) {
@@ -299,7 +333,7 @@ export function v1Route<
     try {
       // 2. IP limit.
       limitOrThrow("v1:ip", ip, IP_LIMIT);
-      if (options.ipLimit) limitOrThrow(`v1:${options.ipLimit.name}:ip`, ip, options.ipLimit);
+      if (options.ipLimit) await namedLimitOrThrow(`v1:${options.ipLimit.name}:ip`, ip, options.ipLimit);
 
       // 3. CSRF.
       checkCsrf(req);
@@ -465,7 +499,7 @@ export function v1Route<
 
         // Endpoint-specific limit, after idempotency: a replay isn't counted.
         try {
-          if (options.limit) limitOrThrow(`v1:${options.limit.name}`, `${org.id}:${person.id}`, options.limit);
+          if (options.limit) await namedLimitOrThrow(`v1:${options.limit.name}`, `${org.id}:${person.id}`, options.limit);
         } catch (e) {
           if (recordId) await releaseKey(recordId);
           throw e;

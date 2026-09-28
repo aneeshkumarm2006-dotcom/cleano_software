@@ -4521,3 +4521,19 @@ model UserRequestActivity {
   @@index([minute])
   @@index([userId])
 }
+
+/// Shared fixed-window rate limit counters (src/lib/shared-rate-limit.ts).
+/// NOT a tenant table: per-email / per-address limits on the platform host
+/// and better-auth's sign-in counters span companies. RLS forced with no
+/// policy and no awer_app grant; reached only through the platform client.
+/// `key` is an HMAC digest, never a raw email or address.
+model RateLimitCounter {
+  key         String @id
+  count       Int    @default(0)
+  /// Epoch ms: the window's start, or better-auth's last request.
+  windowStart BigInt
+  /// Epoch ms.
+  expiresAt   BigInt
+
+  @@index([expiresAt])
+}

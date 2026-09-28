@@ -23,7 +23,7 @@ export const POST = v1Route(
     access: "public",
     body: WorkspacesRequest,
     response: WorkspacesResponse,
-    ipLimit: { name: "workspaces", max: 30, windowMs: 60_000 },
+    ipLimit: { name: "workspaces", max: 30, windowMs: 60_000, shared: true },
   },
   async (ctx) => {
     const outcome = await discoverWorkspacesFor(ctx.body.email, ctx.body.password, ctx.ip, {
