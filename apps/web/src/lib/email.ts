@@ -9,6 +9,7 @@ import { getTaxRates } from "@/lib/tax.server";
 import { taxLines } from "@/lib/tax";
 import { currentAppUrl } from "@/lib/org-url";
 import { recordAdminNotification } from "@/lib/admin-notifications";
+import { isOwnerAdminRole } from "@/lib/role-routing";
 
 /**
  * Identifies the catalog row that gates a given email send.
@@ -535,6 +536,20 @@ async function fetchAdmins() {
     where: { role: { in: ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD"] } },
     select: { id: true, name: true, email: true },
   });
+}
+
+/**
+ * The company's OWNER and ADMIN users only, active and not deleted: for mail
+ * about money that only they decide (a payout request). Read through the
+ * org-scoped db, so it never reaches another company's people; the role is
+ * checked again with isOwnerAdminRole so a widened query can't widen the list.
+ */
+async function fetchOwnerAdmins() {
+  const rows = await db.user.findMany({
+    where: { role: { in: ["OWNER", "ADMIN"] }, isActive: true, deletedAt: null },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  return rows.filter((u) => isOwnerAdminRole(u.role));
 }
 
 /**
@@ -2292,7 +2307,9 @@ export async function sendAdminPayoutRequest(opts: {
   amount: number;
   paymentMethod?: string | null;
 }) {
-  const admins = await fetchAdmins();
+  // Owner decision: payout requests reach the company's OWNER and ADMIN
+  // only, never an OPS_MANAGER or FIELD_LEAD.
+  const admins = await fetchOwnerAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
   const html = layout(

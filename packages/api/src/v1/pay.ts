@@ -219,7 +219,8 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  *      releases both. Then the office alert, naming the net amount as the
  *      web's does.
  * Per-person rate limit: 5 an hour (429). Each request emails the cleaner and
- * the office (with the net amount, as the web's emails do), and every retry
+ * the company's OWNER and ADMIN users only (with the net amount, as the
+ * web's emails do; never an OPS_MANAGER or FIELD_LEAD), and every retry
  * of a new request carries a new key.
  * Without the lock, two requests sent together would each see the whole
  * balance and both succeed; web requestWithdrawal has that race today.

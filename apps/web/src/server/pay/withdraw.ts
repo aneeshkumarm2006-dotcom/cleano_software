@@ -6,13 +6,14 @@
 //   - the person asks for an amount; the instant fee comes out of it; the row
 //     is recorded at the NET (so admin screens and payout processing read it
 //     as always), with the fee in feeAmount beside it;
+//   - paymentMethod stays null: how the money goes out is the office's call;
+//   - an INFO alert for the office, an email to the cleaner, and one to the
+//     company's OWNER and ADMIN users only (never OPS_MANAGER or FIELD_LEAD)
+//     naming the net amount.
 //
 // Changed on purpose: the balance loses the WHOLE amount asked for (net +
 // fee), not just the net; before feeAmount existed the fee stayed in the
 // balance and could be withdrawn again. See ./balance.ts.
-//   - paymentMethod stays null: how the money goes out is the office's call;
-//   - an INFO alert for the office, and emails to the cleaner and the office
-//     naming the net amount.
 //
 // Stricter than the web was, because the contract requires it:
 //   - the balance check is on the amount ASKED FOR, before the fee. The web
