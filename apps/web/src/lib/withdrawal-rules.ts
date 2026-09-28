@@ -25,11 +25,29 @@ export const WITHDRAWAL_TIMING = "Sent within 0–3 hours, during working hours.
 
 /**
  * The fee on `amountCents` at `basisPoints`, rounded half up to the cent:
- * round(amountCents × rate ÷ 10000). Integers in, integer out.
+ * round(amountCents × rate ÷ 10000), but never under 1 cent when both the
+ * rate and the amount are above zero, so a tiny withdrawal can't be fee-free.
+ * Integers in, integer out.
  */
 export function withdrawalFeeCents(amountCents: number, basisPoints: number): number {
-  return Math.round((amountCents * basisPoints) / 10_000);
+  if (amountCents <= 0 || basisPoints <= 0) return 0;
+  return Math.max(1, Math.round((amountCents * basisPoints) / 10_000));
 }
+
+/**
+ * What one withdrawal holds off the balance, in cents: the net that is paid
+ * out PLUS the fee taken, i.e. the whole amount that was asked for. Rows made
+ * before the fee was stored have feeAmount 0 and hold only their net.
+ */
+export function reservedCentsOf(row: {
+  amount: number | null | undefined;
+  feeAmount: number | null | undefined;
+}): number {
+  return toCents(row.amount) + toCents(row.feeAmount);
+}
+
+/** Withdrawal states that hold money: everything except REJECTED. */
+export const RESERVING_WITHDRAWAL_STATUSES = ["PENDING", "APPROVED", "COMPLETED"] as const;
 
 /** Dollars (as stored) to integer cents, once. */
 export function toCents(dollars: number | null | undefined): number {

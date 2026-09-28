@@ -178,19 +178,20 @@ export async function payoutsFor(actor: Actor, rawCursor: string | undefined): P
 const WITHDRAWAL_SELECT = {
   id: true,
   amount: true,
+  feeAmount: true,
   status: true,
   createdAt: true,
   processedAt: true,
   notes: true,
 } satisfies Prisma.WithdrawalSelect;
 
-/** A stored withdrawal, as the phone reads it back. The fee isn't stored, so it's null. */
+/** A stored withdrawal, as the phone reads it back. Legacy rows carry fee 0. */
 export function withdrawalOut(w: Prisma.WithdrawalGetPayload<{ select: typeof WITHDRAWAL_SELECT }>): Withdrawal {
   const cents = toCents(w.amount);
   return {
     id: w.id,
     amountCents: cents,
-    feeCents: null,
+    feeCents: toCents(w.feeAmount),
     netCents: cents,
     status: w.status,
     requestedAt: w.createdAt.toISOString(),
@@ -202,9 +203,8 @@ export function withdrawalOut(w: Prisma.WithdrawalGetPayload<{ select: typeof WI
 /**
  * A replayed POST /api/v1/pay/withdrawals, rebuilt from the stored row
  * rather than a 30-day copy of the answer (the idempotency record keeps only
- * the id). The row stores the net; the amount asked for is in the replayed
- * request, whose body is byte-for-byte the original's (the key's hash
- * matched), so the fee is exactly what was taken the first time: asked − net.
+ * the id). The row stores the net and the fee, so the fee is exactly what was
+ * taken the first time.
  * Status and processedAt are as they are now; the balance is today's.
  */
 export async function withdrawalReplayFor(
@@ -219,9 +219,12 @@ export async function withdrawalReplayFor(
   if (!row) return notFound("We couldn't find that withdrawal.");
   const out = withdrawalOut(row);
   const balance = await readBalance(actor.userId);
+  // Legacy rows (made before feeAmount) store 0: fall back to asked − net,
+  // the replayed body being byte-for-byte the original's.
   const netCents = out.netCents ?? out.amountCents;
+  const feeCents = out.feeCents || Math.max(0, askedCents - netCents);
   return ok({
-    withdrawal: { ...out, feeCents: Math.max(0, askedCents - netCents) },
+    withdrawal: { ...out, feeCents },
     availableCents: balance.availableCents,
   });
 }

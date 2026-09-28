@@ -16,6 +16,9 @@ import { delay } from "./delay";
 import { daysFromToday } from "./zone";
 
 const FEE_BPS = 500;
+/** The server's fee: rounded half up, at least 1 cent when rate and amount are above 0. */
+const feeOf = (cents: number, bps: number) =>
+  cents <= 0 || bps <= 0 ? 0 : Math.max(1, Math.round((cents * bps) / 10_000));
 const MINIMUM_CENTS = 1000;
 
 /** A date `days` from today as "YYYY-MM-DD". */
@@ -82,10 +85,11 @@ const paidCents = PAYOUTS.filter((p) => p.status === "PAID").reduce((s, p) => s 
 
 const withdrawals: Withdrawal[] = [
   {
-    // Asked for $600.00; stored, as the web stores it, at $570.00 after the fee.
+    // Asked for $600.00; stored, as the web stores it, at $570.00 after the
+    // $30.00 fee, which is stored beside it.
     id: "w-2",
     amountCents: 57000,
-    feeCents: null,
+    feeCents: 3000,
     netCents: 57000,
     status: "COMPLETED",
     requestedAt: instant(monday - 8, 16),
@@ -95,7 +99,7 @@ const withdrawals: Withdrawal[] = [
   {
     id: "w-1",
     amountCents: 85500,
-    feeCents: null,
+    feeCents: 4500,
     netCents: 85500,
     status: "COMPLETED",
     requestedAt: instant(monday - 15, 10),
@@ -107,10 +111,12 @@ const replays = new Map<string, WithdrawalResponse>();
 
 /**
  * Paid in, minus every withdrawal the office hasn't declined at its stored
- * amount, which is the net after the fee. The server's own formula.
+ * net PLUS its stored fee: the whole amount asked for. The server's own formula.
  */
 function available(): number {
-  const reserved = withdrawals.filter((w) => w.status !== "REJECTED").reduce((s, w) => s + w.amountCents, 0);
+  const reserved = withdrawals
+    .filter((w) => w.status !== "REJECTED")
+    .reduce((s, w) => s + w.amountCents + (w.feeCents ?? 0), 0);
   return Math.max(0, paidCents - reserved);
 }
 
@@ -193,8 +199,9 @@ export const previewPayApi = {
     if (body.amountCents > balance) {
       throw new ApiError(`That's more than your available balance ($${(balance / 100).toFixed(2)}).`, 409, "INSUFFICIENT_BALANCE", false);
     }
-    // The balance check is on what was asked for; the row is stored at the net.
-    const feeCents = Math.round((body.amountCents * FEE_BPS) / 10_000);
+    // The balance check is on what was asked for (net + fee), which is what
+    // the balance loses; the row is stored at the net with the fee beside it.
+    const feeCents = feeOf(body.amountCents, FEE_BPS);
     const netCents = body.amountCents - feeCents;
     if (netCents < 1) {
       throw new ApiError("That's too small to send once the fee is taken.", 400, "AMOUNT_TOO_SMALL", false);
@@ -202,7 +209,7 @@ export const previewPayApi = {
     const stored: Withdrawal = {
       id: `w-${withdrawals.length + 1}`,
       amountCents: netCents,
-      feeCents: null,
+      feeCents,
       netCents,
       status: "PENDING",
       requestedAt: new Date().toISOString(),
@@ -210,8 +217,7 @@ export const previewPayApi = {
       note: body.note ?? null,
     };
     withdrawals.unshift(stored);
-    // Only the answer to the request knows the fee; the row doesn't keep it.
-    const res = { withdrawal: { ...stored, feeCents }, availableCents: available() };
+    const res = { withdrawal: stored, availableCents: available() };
     replays.set(body.clientEventId, res);
     return res;
   },

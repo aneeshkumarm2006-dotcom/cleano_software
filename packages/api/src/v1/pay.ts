@@ -101,8 +101,9 @@ export const PayResponse = z.object({
   balance: z.object({
     /**
      * What the cleaner may withdraw right now: PAID payouts minus every
-     * withdrawal that isn't REJECTED, each at its stored amount (after the
-     * fee; see Withdrawal), never below zero. The SAME formula
+     * withdrawal that isn't REJECTED, each at its stored amount PLUS its
+     * stored fee (the gross asked for; see Withdrawal), never below zero.
+     * The SAME formula
      * POST /pay/withdrawals checks against.
      */
     availableCents: Cents,
@@ -149,16 +150,15 @@ export type PayoutsResponse = z.infer<typeof PayoutsResponse>;
 export const Withdrawal = z.object({
   id: z.string(),
   /**
-   * The stored Withdrawal.amount: what came off the available balance and
-   * what reaches the cleaner. The web records a request at the amount AFTER
-   * the instant fee (WithdrawModal sends the net to requestWithdrawal), and
-   * v1 records it the same way, so both see the same rows.
+   * The stored Withdrawal.amount: what reaches the cleaner, the amount AFTER
+   * the instant fee. The web and v1 record it the same way, so both see the
+   * same rows. The balance goes down by this PLUS `feeCents`.
    */
   amountCents: Cents,
   /**
-   * The fee taken from what was asked for. The row doesn't store it (the web
-   * keeps only the net), so it is set on the POST answer and null on rows
-   * read back.
+   * The fee taken from what was asked for (Withdrawal.feeAmount). It comes
+   * off the balance with the net. 0 on rows made before the fee was stored;
+   * null only if a server can't say.
    */
   feeCents: Cents.nullable(),
   /** What reaches the cleaner: the same as `amountCents`. */
@@ -187,8 +187,9 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  * decision (paymentMethod stays null until they process it).
  *
  * The fee works exactly as it does on the web today: the person asks for
- * `amountCents`, the fee comes out of that, and the withdrawal is recorded,
- * and taken off the available balance, at the net.
+ * `amountCents`, the fee comes out of that, and the withdrawal is recorded
+ * at the net with the fee beside it. The WHOLE amount asked for (net + fee)
+ * comes off the available balance, so the fee can't be withdrawn again.
  *
  * THE SERVER RE-VALIDATES THE AMOUNT; the app's check is only for the person.
  * Inside ONE database transaction, holding a lock that serialises the caller's
@@ -196,25 +197,27 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  * retry), it must:
  *   1. recompute the available balance from the caller's own rows: PAID
  *      payouts through summarisePayouts (clamped, so a legacy negative payout
- *      can't shrink it), minus the stored amount of every PENDING, APPROVED
- *      and COMPLETED withdrawal;
+ *      can't shrink it), minus the stored amount plus stored fee of every
+ *      PENDING, APPROVED and COMPLETED withdrawal;
  *   2. refuse `amountCents` below `minimumCents` (400 AMOUNT_TOO_SMALL) or
  *      above that balance (409 INSUFFICIENT_BALANCE, with the balance in the
  *      message). The check is on the amount asked for, before the fee, as
- *      the web's WithdrawModal checks it;
+ *      the web's WithdrawModal checks it (the gross is what the balance loses);
  *   3. compute the fee from the SERVER's rate, never the app's. If that rate
  *      isn't `expectedFeeBasisPoints` (the rate the person was shown and
  *      agreed to), refuse with 409 FEE_CHANGED rather than charge a fee they
  *      never saw. The rate is an integer from 0 to 10000. The fee rounds half
- *      up to the cent, round(amountCents × rate ÷ 10000), exactly as the app
- *      and the web's modal show it, and the net, amountCents − fee, must be at
+ *      up to the cent, round(amountCents × rate ÷ 10000), but is at least 1
+ *      cent whenever the rate is above 0, exactly as the app and the web's
+ *      modal show it, and the net, amountCents − fee, must be at
  *      least 1 cent (else 400 AMOUNT_TOO_SMALL);
  *   4. create the Withdrawal (PENDING) as the web's requestWithdrawal does:
- *      `amount` = the net, in dollars, `paymentMethod` null, the note in
- *      `notes`. So the web's admin screens and its balance read this row
- *      exactly as they read one made on the web, and the available balance
- *      goes down by the net. Then the office alert, naming the net amount as
- *      the web's does.
+ *      `amount` = the net, in dollars, `feeAmount` = the fee, in dollars,
+ *      `paymentMethod` null, the note in `notes`. So the web's admin screens
+ *      read this row exactly as they read one made on the web, and the
+ *      available balance goes down by net + fee. A REJECTED withdrawal
+ *      releases both. Then the office alert, naming the net amount as the
+ *      web's does.
  * Per-person rate limit: 5 an hour (429). Each request emails the cleaner and
  * the office (with the net amount, as the web's emails do), and every retry
  * of a new request carries a new key.
@@ -227,7 +230,8 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
 export const WithdrawalRequest = z.object({
   /**
    * What the person asks for, before the fee. Checked against the available
-   * balance; the net after the fee is what's recorded and taken off it.
+   * balance; the net after the fee is what's recorded and paid out, and the
+   * whole of it (net + fee) is taken off the balance.
    */
   amountCents: z.number().int().positive(),
   /** The fee rate on the confirmation the person agreed to. */
@@ -240,7 +244,7 @@ export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
 
 export const WithdrawalResponse = z.object({
   withdrawal: Withdrawal,
-  /** The balance left after this request (the balance before, less the net), computed in the same transaction. */
+  /** The balance left after this request (the balance before, less net + fee), computed in the same transaction. */
   availableCents: Cents,
 });
 export type WithdrawalResponse = z.infer<typeof WithdrawalResponse>;

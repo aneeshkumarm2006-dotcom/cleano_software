@@ -169,7 +169,8 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
           </View>
         </Card>
         <Card padding={4}>
-          <MoneyLine label="Left to withdraw after this" value={money(Math.max(0, available - net))} />
+          {/* The whole amount asked for (net + fee) comes off the balance. */}
+          <MoneyLine label="Left to withdraw after this" value={money(Math.max(0, available - step.amountCents))} />
         </Card>
         {step.note ? (
           <Text variant="small" color="ink2">

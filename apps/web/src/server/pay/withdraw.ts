@@ -4,7 +4,12 @@
 //
 // Kept from the web, deliberately:
 //   - the person asks for an amount; the instant fee comes out of it; the row
-//     is recorded, and taken off the balance, at the NET;
+//     is recorded at the NET (so admin screens and payout processing read it
+//     as always), with the fee in feeAmount beside it;
+//
+// Changed on purpose: the balance loses the WHOLE amount asked for (net +
+// fee), not just the net; before feeAmount existed the fee stayed in the
+// balance and could be withdrawn again. See ./balance.ts.
 //   - paymentMethod stays null: how the money goes out is the office's call;
 //   - an INFO alert for the office, and emails to the cleaner and the office
 //     naming the net amount.
@@ -57,7 +62,7 @@ export interface WithdrawalValue {
   status: "PENDING";
   requestedAt: Date;
   note: string | null;
-  /** The balance left: the balance before, less the net. Never below zero. */
+  /** The balance left: the balance before, less net + fee. Never below zero. */
   availableCents: number;
 }
 
@@ -112,6 +117,7 @@ export async function requestWithdrawalService(
 
     // Read under the lock: any request of this person's that committed first
     // is already in the reserved total.
+    // The check is on the gross (net + fee): that is what the balance loses.
     const balance = await readBalance(actor.userId, tx);
     if (amountCents > balance.rawCents) {
       return {
@@ -129,6 +135,8 @@ export async function requestWithdrawalService(
         employeeId: actor.userId,
         // Stored in dollars, as every existing reader expects: the net.
         amount: netCents / 100,
+        // The fee beside it, so the balance reserves net + fee.
+        feeAmount: feeCents / 100,
         // Left for the admin to set when the payout is actually processed.
         paymentMethod: null,
         status: "PENDING",
@@ -148,7 +156,7 @@ export async function requestWithdrawalService(
       },
     });
 
-    return { kind: "created" as const, row, availableCents: Math.max(0, balance.rawCents - netCents) };
+    return { kind: "created" as const, row, availableCents: Math.max(0, balance.rawCents - amountCents) };
   });
 
   if (outcome.kind === "refused") return outcome.failure;

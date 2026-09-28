@@ -2676,7 +2676,11 @@ model Withdrawal {
   organizationId String           @default("")
   id             String           @id @default(cuid())
   employeeId     String
+  // The net: what reaches the cleaner. Admin screens and payouts read this.
   amount         Float
+  // The instant fee taken on top of the net, in dollars. The balance reserves
+  // amount + feeAmount. 0 on rows made before it was stored.
+  feeAmount      Float            @default(0)
   status         WithdrawalStatus @default(PENDING)
   paymentMethod  PaymentType?
   notes          String?

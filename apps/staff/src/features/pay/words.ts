@@ -61,8 +61,12 @@ export function parseAmount(input: string): number | null {
   return Number.isSafeInteger(cents) ? cents : null;
 }
 
-/** The fee on an amount, as the server will compute it: basis points, rounded to the cent. */
-export const feeCents = (amountCents: number, feeBasisPoints: number) => Math.round((amountCents * feeBasisPoints) / 10_000);
+/**
+ * The fee on an amount, as the server will compute it: basis points, rounded
+ * to the cent, and at least 1 cent whenever the rate and amount are above 0.
+ */
+export const feeCents = (amountCents: number, feeBasisPoints: number) =>
+  amountCents <= 0 || feeBasisPoints <= 0 ? 0 : Math.max(1, Math.round((amountCents * feeBasisPoints) / 10_000));
 
 /** "5%", "2.5%". */
 export const percentText = (bps: number) => `${Number((bps / 100).toFixed(2))}%`;

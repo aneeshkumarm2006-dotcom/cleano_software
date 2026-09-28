@@ -703,11 +703,11 @@ async function main() {
         ok.status === 200 && ok.body?.withdrawal?.amountCents === 1900 && ok.body.withdrawal.feeCents === 100 && ok.body.withdrawal.netCents === 1900 && ok.body.withdrawal.status === "PENDING" && ok.body.withdrawal.note === "Rent week",
         ok.body,
       );
-      check("withdraw: the balance left is the balance before, less the net", ok.body?.availableCents === 7100, ok.body?.availableCents);
+      check("withdraw: the balance left is the balance before, less net + fee", ok.body?.availableCents === 7000, ok.body?.availableCents);
       const row = ok.body?.withdrawal?.id
-        ? await db.withdrawal.findUnique({ where: { id: ok.body.withdrawal.id }, select: { amount: true, paymentMethod: true, status: true, employeeId: true } })
+        ? await db.withdrawal.findUnique({ where: { id: ok.body.withdrawal.id }, select: { amount: true, feeAmount: true, paymentMethod: true, status: true, employeeId: true } })
         : null;
-      check("withdraw: the row is the web's shape — net dollars, no method, PENDING, mine", row?.amount === 19 && row.paymentMethod === null && row.status === "PENDING" && row.employeeId === F.users.cleaner.id, row);
+      check("withdraw: the row is the web's shape — net dollars, fee beside it, no method, PENDING, mine", row?.amount === 19 && row.feeAmount === 1 && row.paymentMethod === null && row.status === "PENDING" && row.employeeId === F.users.cleaner.id, row);
       const alerts = await db.alert.count({ where: { relatedType: "Withdrawal" } });
       check("withdraw: one office alert", alerts === alertsBefore + 1, { alertsBefore, alerts });
 
@@ -729,10 +729,10 @@ async function main() {
       check("withdraw: the same key with a different amount is 422", reuse.status === 422, reuse.body);
 
       const pay = await get("/api/v1/pay", cleaner);
-      check("pay: the balance went down by the net", pay.body?.balance?.availableCents === 7100, pay.body?.balance);
+      check("pay: the balance went down by net + fee", pay.body?.balance?.availableCents === 7000, pay.body?.balance);
       const list = await get("/api/v1/pay/withdrawals", cleaner);
       const top = list.body?.items?.[0];
-      check("withdrawals: the new one is first, read back with no fee", top?.id === ok.body?.withdrawal?.id && top.feeCents === null && top.netCents === 1900, top);
+      check("withdrawals: the new one is first, read back with its fee", top?.id === ok.body?.withdrawal?.id && top.feeCents === 100 && top.netCents === 1900, top);
 
       const ap = await withdraw(applicant, 100);
       check("withdraw: an APPLICANT is 403", ap.status === 403, ap.body);
@@ -756,7 +756,7 @@ async function main() {
     }
     {
       // x2 has $100.00. Three requests of $20.00 at once, then the balance:
-      // every one fits in turn, and the balance is exactly 100 − 3 × 19.
+      // every one fits in turn, and the balance is exactly 100 − 3 × 20 (net + fee).
       const x2 = await signIn(HOST_A, M.people.x2.email);
       const results = await Promise.all(
         [0, 1, 2].map(() => postOnce("/api/v1/pay/withdrawals", x2, { amountCents: 2000, expectedFeeBasisPoints: 500, clientEventId: randomUUID() })),
@@ -765,7 +765,7 @@ async function main() {
       const lefts = results.map((r) => r.body?.availableCents).sort((a, b) => a - b);
       check(
         "overdraw: three $20 requests at once — all three, each seeing the one before",
-        results.every((r) => r.status === 200) && pay.body?.balance?.availableCents === 4300 && JSON.stringify(lefts) === JSON.stringify([4300, 6200, 8100]),
+        results.every((r) => r.status === 200) && pay.body?.balance?.availableCents === 4000 && JSON.stringify(lefts) === JSON.stringify([4000, 6000, 8000]),
         { r: results.map((r) => [r.status, r.body?.availableCents ?? r.body?.error?.code]), left: pay.body?.balance },
       );
     }

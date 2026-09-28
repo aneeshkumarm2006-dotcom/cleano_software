@@ -2,7 +2,12 @@
 //
 //   PAID payouts, each through computePayoutTotals (clamped, so a legacy
 //   negative payout can't shrink it), summed by summarisePayouts
-//   minus the stored amount of every PENDING, APPROVED and COMPLETED withdrawal
+//   minus the stored amount PLUS the stored fee of every PENDING, APPROVED
+//   and COMPLETED withdrawal (a REJECTED one releases both)
+//
+// The fee counts: a withdrawal takes the whole amount asked for off the
+// balance, not just the net that is paid out, or the fee would stay in the
+// balance and could be withdrawn again. Legacy rows have feeAmount 0.
 //
 // This is the definition requestWithdrawal has always checked against. The My
 // pay page used to compute its own copy (earnings.walletBalance minus a float
@@ -17,15 +22,14 @@ import { summarisePayouts } from "@bookmops/core/pay";
 
 import type { ScopedTx } from "@/lib/db-scoped";
 import { db } from "@/lib/org-db";
-import { toCents } from "@/lib/withdrawal-rules";
+import { RESERVING_WITHDRAWAL_STATUSES, reservedCentsOf, toCents } from "@/lib/withdrawal-rules";
 
-/** Withdrawal states that hold money: everything except REJECTED. */
-export const RESERVING_WITHDRAWAL_STATUSES = ["PENDING", "APPROVED", "COMPLETED"] as const;
+export { RESERVING_WITHDRAWAL_STATUSES };
 
 export interface Balance {
   /** PAID payouts, clamped per row. */
   paidCents: number;
-  /** Every withdrawal that isn't REJECTED, at its stored (net) amount. */
+  /** Every withdrawal that isn't REJECTED, at its stored net plus its stored fee. */
   reservedCents: number;
   /** paid − reserved. Can be negative on legacy data; see `availableCents`. */
   rawCents: number;
@@ -47,13 +51,13 @@ export async function readBalance(employeeId: string, client: ScopedTx = db): Pr
     }),
     client.withdrawal.findMany({
       where: { employeeId, status: { in: [...RESERVING_WITHDRAWAL_STATUSES] } },
-      select: { amount: true },
+      select: { amount: true, feeAmount: true },
     }),
   ]);
   const paidCents = toCents(summarisePayouts(payouts).totalFinal);
   // Each stored amount is converted once, then summed as integers: no float
   // drift across many withdrawals.
-  const reservedCents = withdrawals.reduce((sum, w) => sum + toCents(w.amount), 0);
+  const reservedCents = withdrawals.reduce((sum, w) => sum + reservedCentsOf(w), 0);
   const rawCents = paidCents - reservedCents;
   return { paidCents, reservedCents, rawCents, availableCents: Math.max(0, rawCents) };
 }
