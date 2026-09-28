@@ -795,6 +795,11 @@ export default function WelcomePage() {
             <Link href="/cleanos/login">Cleaners</Link>
             <Link href="/login">Customers</Link>
           </nav>
+          <nav aria-label="Help">
+            <p className="mk-foot-label">Help</p>
+            <Link href="/support">Support</Link>
+            <Link href="/privacy">Privacy Policy</Link>
+          </nav>
         </div>
         <div className="mk-wrap mk-foot-base">
           <span>&copy; {new Date().getFullYear()} Bookmops</span>

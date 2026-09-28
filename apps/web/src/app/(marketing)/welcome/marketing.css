@@ -1681,3 +1681,10 @@
 @media print {
   .mk [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
+
+/* Five footer columns (the Help column) need the room; between 560 and 900
+   the fifth wraps onto a second row instead of squeezing every column. Placed
+   last so it outranks the 560px rule above. */
+@media (min-width: 900px) {
+  .mk-foot-grid { grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; }
+}

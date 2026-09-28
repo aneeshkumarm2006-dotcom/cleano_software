@@ -1,0 +1,83 @@
+/*
+ * Long-form text pages (privacy, support) on top of the front page's tokens.
+ * Scoped under .mk like marketing.css, so nothing here reaches the app.
+ */
+.mk-doc-main { padding-block: clamp(var(--mk-s4), 6vw, var(--mk-s5)) var(--mk-s5); }
+
+.mk-doc { max-width: 72ch; }
+.mk-doc .mk-h1 { font-size: clamp(34px, 4.6vw, 52px); }
+.mk-doc-meta { margin: 0 0 var(--mk-s4); font-size: 14px; color: var(--mk-ink-soft); }
+
+.mk-doc section { margin-top: var(--mk-s4); scroll-margin-top: 96px; }
+.mk-doc h2 {
+  font-family: var(--mk-display);
+  font-size: clamp(21px, 2.2vw, 25px);
+  font-stretch: 104%;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0 0 var(--mk-s2);
+}
+.mk-doc h3 { font-size: 17px; font-weight: 600; margin: var(--mk-s3) 0 6px; }
+.mk-doc p, .mk-doc li { color: var(--mk-ink-soft); }
+.mk-doc p { margin: 0 0 12px; }
+.mk-doc ul { margin: 0 0 12px; padding-left: 1.25em; }
+.mk-doc li { margin-bottom: 6px; }
+.mk-doc li::marker { color: var(--mk-teal); }
+.mk-doc strong { color: var(--mk-ink); font-weight: 600; }
+.mk-doc a {
+  color: var(--mk-teal-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mk-doc a:hover { text-decoration-thickness: 2px; }
+
+/* Plain table of sub-processors; wraps rather than scrolls on a phone. */
+.mk-doc-table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 15px; }
+.mk-doc-table th, .mk-doc-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid var(--mk-line);
+}
+.mk-doc-table th { color: var(--mk-ink); font-weight: 600; font-size: 13px; }
+.mk-doc-table td { color: var(--mk-ink-soft); }
+.mk-doc-table td:first-child { color: var(--mk-ink); font-weight: 600; white-space: nowrap; }
+
+.mk-doc-toc {
+  background: var(--mk-wash);
+  border: 1px solid var(--mk-line);
+  border-radius: var(--mk-radius);
+  padding: var(--mk-s2) var(--mk-s3);
+}
+.mk-doc-toc p { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--mk-ink); }
+.mk-doc-toc ol { margin: 0; padding-left: 1.25em; columns: 2 16ch; column-gap: var(--mk-s3); }
+.mk-doc-toc li { margin-bottom: 4px; font-size: 14.5px; }
+
+.mk-doc-card {
+  background: var(--mk-teal-wash);
+  border: 1px solid var(--mk-teal-mist);
+  border-radius: var(--mk-radius);
+  padding: var(--mk-s3);
+  margin-top: var(--mk-s3);
+}
+.mk-doc-card h2 { margin-bottom: 8px; }
+.mk-doc-card p:last-child { margin-bottom: 0; }
+
+/* The FAQ reuses native <details>: keyboard and screen-reader support for free. */
+.mk-doc-faq details { border-bottom: 1px solid var(--mk-line); }
+.mk-doc-faq summary {
+  cursor: pointer;
+  list-style-position: outside;
+  padding: 14px 0;
+  font-weight: 600;
+  color: var(--mk-ink);
+}
+.mk-doc-faq details[open] summary { padding-bottom: 6px; }
+.mk-doc-faq details > div { padding-bottom: 12px; }
+
+.mk .mk-doc-foot { padding-block: 0 var(--mk-s3); }
+.mk .mk-doc-foot-base { margin-top: 0; }
+.mk-foot .mk-doc-foot-links { display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--mk-s3); }
+.mk .mk-doc-foot-links a { color: var(--mk-ink-soft); text-decoration: none; }
+.mk .mk-doc-foot-links a:hover { color: var(--mk-teal-ink); text-decoration: underline; }

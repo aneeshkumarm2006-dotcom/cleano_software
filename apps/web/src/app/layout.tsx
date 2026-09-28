@@ -100,7 +100,12 @@ export default async function RootLayout({
     path.startsWith("/get-started") ||
     // Bookmops' own front page. It describes the product to a stranger and belongs
     // to no workspace, so a missing or suspended one must not hide it.
-    path.startsWith("/welcome");
+    path.startsWith("/welcome") ||
+    // Bookmops' privacy policy and support page. Legal and help text has to stay
+    // readable when a workspace is suspended — that is exactly when someone
+    // goes looking for how to get their data or reach us.
+    path === "/privacy" ||
+    path === "/support";
   let org: Awaited<ReturnType<typeof getCurrentOrg>> = null;
   if (!outsideTheGate) {
     org = await getCurrentOrg();

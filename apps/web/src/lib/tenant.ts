@@ -115,6 +115,11 @@ const PLATFORM_PATHS = [
   "/sign-in", // staff door, shared with the console
   "/workspace-unavailable", // the suspended / unknown workspace notice
   "/design", // internal design reference
+  // Bookmops' own privacy policy and support page. Also served on every
+  // company's subdomain (they are in the proxy's public list), so a cleaner can
+  // reach them from the address their app already uses.
+  "/privacy",
+  "/support",
 ];
 
 /** Is this path Bookmops' own, as opposed to part of a company's application? */

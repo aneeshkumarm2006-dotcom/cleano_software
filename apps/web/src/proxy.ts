@@ -33,6 +33,8 @@ const PUBLIC_EXACT = new Set<string>([
   '/join-waitlist', // public waitlist signup
   '/apple-icon', // PWA icon for iOS home screen
   '/workspace-unavailable', // suspended / unknown workspace notice
+  '/privacy', // Bookmops' privacy policy — same page on every host
+  '/support', // Bookmops' support page — same page on every host
 ])
 
 // Public path prefixes (anything under these is public)
