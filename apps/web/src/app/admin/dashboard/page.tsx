@@ -187,6 +187,62 @@ function ListCard({
   );
 }
 
+type LowCleaner = { id: string; name: string; lowCount: number };
+
+/** Rows shown; "View all" covers the rest. */
+const LOW_SUPPLIES_LIMIT = 5;
+
+/**
+ * Cleaners holding refill items at or below their restock threshold, most
+ * items low first. Built from ListCard's parts so it reads as one of the
+ * dashboard's lists rather than a banner. Each row opens that cleaner's
+ * products tab; "View all" is the inventory hub's Cleaner Inventory tab,
+ * which lists every cleaner's kit.
+ */
+function LowSuppliesCard({ cleaners }: { cleaners: LowCleaner[] }) {
+  const shown = cleaners.slice(0, LOW_SUPPLIES_LIMIT);
+  return (
+    <div className="dcard tab-panel-wide" style={{ gap: 4, padding: 0 }}>
+      <div className="dash-listcard-head">
+        <div className="row" style={{ gap: 8, minWidth: 0 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Low on supplies</h3>
+          {cleaners.length > 0 && (
+            <span
+              className="pill"
+              style={{ background: "var(--warning-soft)", color: "var(--amber-800)" }}>
+              {cleaners.length}
+              <span className="sr-only">{cleaners.length === 1 ? " cleaner" : " cleaners"}</span>
+            </span>
+          )}
+        </div>
+        <Link href="/admin/inventory?view=cleaners" className="link" style={{ fontSize: 13, fontWeight: 500, flex: "none" }}>
+          View all →
+        </Link>
+      </div>
+      {shown.length === 0 ? (
+        <div className="dash-list-empty">Everyone&apos;s stocked</div>
+      ) : (
+        <div className="dash-list">
+          {shown.map((c) => (
+            <Link key={c.id} href={`/admin/employees/${c.id}?tab=products`} className="dash-listrow">
+              <div className="avatar" style={{ background: avatarColor(c.name), width: 36, height: 36 }}>
+                {initials(c.name)}
+              </div>
+              <div className="dash-listrow-meta">
+                <div className="dash-listrow-name">{c.name}</div>
+                <div className="dash-listrow-sub">
+                  {c.lowCount} {c.lowCount === 1 ? "item" : "items"} low
+                </div>
+              </div>
+              <ChevronRight size={16} aria-hidden="true" style={{ color: "var(--primary-50)", flex: "none" }} />
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const session = await getCachedSession();
   if (!session) redirect("/sign-in");
@@ -344,7 +400,7 @@ export default async function DashboardPage() {
     loadCleanerThresholdDefault(),
   ]);
   let refillAlertCount = 0;
-  const refillCleanerMap = new Map<string, { id: string; name: string; lowCount: number }>();
+  const refillCleanerMap = new Map<string, LowCleaner>();
   for (const ep of employeesWithProducts) {
     // The CLEANER restock threshold, which every product has (fix list item
     // 14). This once required an InventoryRule row to exist, so products
@@ -365,7 +421,9 @@ export default async function DashboardPage() {
       else refillCleanerMap.set(ep.employee.id, { id: ep.employee.id, name: ep.employee.name, lowCount: 1 });
     }
   }
-  const refillCleaners = [...refillCleanerMap.values()].sort((a, b) => b.lowCount - a.lowCount);
+  const refillCleaners = [...refillCleanerMap.values()].sort(
+    (a, b) => b.lowCount - a.lowCount || a.name.localeCompare(b.name),
+  );
 
   // "completed · 3 on hold · 12 cancelled" — only naming what actually exists,
   // so a clean business doesn't read a dashboard full of zeroes (fix 3 + 6).
@@ -467,26 +525,12 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Per-cleaner refill detail — deep-links to each cleaner's inventory */}
-      {refillCleaners.length > 0 && (
-        <div className="dcard" style={{ marginBottom: 32, marginTop: -14, padding: "14px 18px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 14px" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--amber-800)" }}>Low on supplies:</span>
-          {refillCleaners.map((c) => (
-            <Link
-              key={c.id}
-              href={`/admin/employees/${c.id}?tab=products`}
-              className="link"
-              style={{ fontSize: 13, fontWeight: 500 }}>
-              {c.name} ({c.lowCount} {c.lowCount === 1 ? "item" : "items"}) →
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Two-column lists */}
+      {/* Two-column lists. Low on supplies spans both columns: it is the odd
+          card out, and half width beside nothing would leave a hole. */}
       <div className="tab-panel" style={{ marginBottom: lowStockProducts.length ? 18 : 32 }}>
         <ListCard title="Upcoming jobs" viewAllHref="/admin/jobs?subTab=upcoming" empty="No upcoming jobs scheduled." rows={upcomingJobs} showMoney={canSeeMoney} />
         <ListCard title="Recently completed" viewAllHref="/admin/jobs?subTab=completed" empty="No completed jobs yet." rows={recentJobs} showMoney={canSeeMoney} />
+        <LowSuppliesCard cleaners={refillCleaners} />
       </div>
 
       {/* Low stock alert */}
