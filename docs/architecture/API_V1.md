@@ -563,7 +563,8 @@ All paths are under `/api/v1`. Notes on the endpoints:
     so they can't serve a tenant. Testing against staging needs a wildcard
     staging domain.
   - Simulators can't resolve `*.localhost`. Local development uses sslip.io or
-    nip.io hostnames.
+    nip.io hostnames; the exact steps for running the app against a local
+    server on the staging database are in `apps/staff/README.md`.
 - **CORS:** none on `/api/v1` or `/api/auth`. Native apps don't need it, and its
   absence is part of the CSRF defence in §4.
 - **`proxy.ts`** skips `/api/*`. `v1Route` does its own host and tenant
