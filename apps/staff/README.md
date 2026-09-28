@@ -102,6 +102,23 @@ serves a wildcard hostname (e.g. a Cloudflare named tunnel on
 A release build always signs in at `https://useawer.com` and only talks to
 `https://<company>.useawer.com`, whatever the build's env says.
 
+## Push notifications
+
+The server sends them (`apps/web/src/server/push`) through the Expo Push API
+to the tokens this app registers with `POST /api/v1/devices`; a tap opens the
+`data.path` in the payload (`useNotificationRouting`). Before a release build
+can receive any, the owner must:
+
+1. **Create the EAS project** (`eas init` while logged in to Expo) so
+   `app.json` gets `extra.eas.projectId`. Without it `enablePush` returns
+   "unavailable" and no token is ever registered.
+2. **Give EAS the push credentials**: an APNs key for iOS (`eas credentials`,
+   or let `eas build` create one) and an FCM v1 service account key for
+   Android.
+3. **Optionally turn on Expo's enhanced push security** for the project and
+   set the access token as `EXPO_ACCESS_TOKEN` on the web app in Vercel; the
+   server sends it as a bearer token when it is set.
+
 ## Things that will bite
 
 - **Install Watchman** (`brew install watchman`). Without it Metro can miss
