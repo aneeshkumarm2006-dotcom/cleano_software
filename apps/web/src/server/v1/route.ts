@@ -53,6 +53,7 @@ import { flushEffects, type Effect } from "../effects";
 import type { Failure, Result } from "../result";
 import { E, errorBody, errorResponse, jsonResponse, V1Error } from "./http";
 import { claimKey, completeKey, isValidKey, releaseKey, requestHash } from "./idempotency";
+import { readJsonBody } from "./body";
 import { verifiedSessionToken } from "./session-token";
 import { appVersions, isBelow, parseVersion } from "./versions";
 
@@ -220,23 +221,6 @@ function limitOrThrow(name: string, key: string, opts: { max: number; windowMs: 
   if (rateLimitHit(name, key, opts)) throw E.rateLimited(opts.windowMs / 1000);
 }
 
-async function readJsonBody(req: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
-  // Refused on the declared length before a byte is read; the read itself is
-  // checked again below for a body that lied about its length or sent none.
-  const declared = Number(req.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
-  }
-  const text = await req.text();
-  if (text.length > maxBytes) throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
-  if (!text) return undefined;
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw E.badRequest("That request wasn't valid JSON.");
-  }
-}
-
 function queryObject(url: URL): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of url.searchParams) {
@@ -351,7 +335,7 @@ export function v1Route<
           base.body = parseOrThrow(options.body, await readJsonBody(req, cap), requestId, "body");
         } else if (method !== "GET" && method !== "HEAD") {
           // No body expected: one that is sent anyway is still read and bounded.
-          await readJsonBody(req);
+          await readJsonBody(req, MAX_BODY_BYTES);
         }
       };
 

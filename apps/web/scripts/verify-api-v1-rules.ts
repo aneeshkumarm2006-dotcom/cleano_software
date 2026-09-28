@@ -16,6 +16,7 @@ import {
 } from "@bookmops/core/time";
 
 import { roleAllowed } from "../src/server/v1/access";
+import { readJsonBody } from "../src/server/v1/body";
 import { canonicalJson, requestHash } from "../src/server/v1/request-hash";
 import { verifiedSessionToken } from "../src/server/v1/session-token";
 import { isBelow, parseVersion } from "../src/server/v1/versions";
@@ -129,5 +130,38 @@ check("the same request is the same hash", requestHash("post", "/x/j1", { b: 1, 
   check("no secret gives nothing", verifiedSessionToken(cookie, undefined), null);
 }
 
+// ── The body cap counts bytes, while streaming ────────────────────────────
+void (async () => {
+  const status = async (req: Request, cap: number) => {
+    try {
+      await readJsonBody(req, cap);
+      return 200;
+    } catch (e) {
+      return (e as { status?: number }).status ?? -1;
+    }
+  };
+  const post = (body: BodyInit, headers: Record<string, string> = {}) =>
+    new Request("http://x.localhost/api/v1/x", { method: "POST", body, headers, duplex: "half" } as RequestInit);
+  // 30 four-byte emoji: 60 UTF-16 units, 120 bytes (+ quotes).
+  const emoji = JSON.stringify("\u{1F600}".repeat(30));
+  check("multi-byte text over the cap in bytes is 413", await status(post(emoji), 100), 413);
+  check("...and the same text under a byte cap that fits is read", await status(post(emoji), 200), 200);
+  // No Content-Length (a stream): cut off at the cap, not buffered whole.
+  let pulled = 0;
+  const endless = new ReadableStream<Uint8Array>({
+    pull(c) {
+      pulled++;
+      if (pulled > 1000) return c.close();
+      c.enqueue(new Uint8Array(1024).fill(0x20));
+    },
+  });
+  check("a streamed body with no length is refused at the cap", await status(post(endless), 4096), 413);
+  check("...after reading only about the cap", pulled <= 8, true);
+  check("a declared length over the cap is 413 before reading", await status(post("{}", { "content-length": "999999" }), 100), 413);
+  check("an empty body is fine", await status(post(""), 100), 200);
+  check("bad UTF-8 is a 400", await status(post(new Uint8Array([0x22, 0xff, 0x22])), 100), 400);
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;
+})();
