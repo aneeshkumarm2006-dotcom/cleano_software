@@ -87,7 +87,8 @@ export async function managerChecks(t: ManagerHarness): Promise<void> {
   const opsC = await signIn(HOST_A, ops.email);
   const leadC = await signIn(HOST_A, lead.email);
   const grpC = await signIn(HOST_A, grp.email);
-  const cleanerC = await signIn(HOST_A, F.users.cleaner.email);
+  // An EMPLOYEE of our own: the shared cleaner's password may have been changed by an earlier area.
+  const cleanerC = await signIn(HOST_A, outsider.email);
 
   const get = (path: string, cookie: string) => call("GET", HOST_A, path, { cookie });
   const post = (path: string, cookie: string, body: Record<string, unknown>, key?: string) =>
