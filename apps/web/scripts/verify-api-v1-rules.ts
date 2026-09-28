@@ -16,6 +16,7 @@ import {
 } from "@bookmops/core/time";
 
 import { roleAllowed } from "../src/server/v1/access";
+import { isSendersChatAsset } from "../src/server/messages/stored-url";
 import { readJsonBody } from "../src/server/v1/body";
 import { canonicalJson, requestHash } from "../src/server/v1/request-hash";
 import { verifiedSessionToken } from "../src/server/v1/session-token";
@@ -128,6 +129,23 @@ check("the same request is the same hash", requestHash("post", "/x/j1", { b: 1, 
   check("a token with someone else's signature gives nothing", verifiedSessionToken(forged, secret), null);
   check("an unsigned cookie gives nothing", verifiedSessionToken("better-auth.session_token=abc123TOKEN", secret), null);
   check("no secret gives nothing", verifiedSessionToken(cookie, undefined), null);
+}
+
+// ── Chat attachment URLs are anchored ─────────────────────────────────────
+{
+  const ok = (u: string) => isSendersChatAsset(u, "acme", "user1", "demo");
+  const base = "https://res.cloudinary.com/demo";
+  check("the sender's own chat image", ok(`${base}/image/upload/v17/awer/acme/chat/user1/a.jpg`), true);
+  check("...a raw file, no version", ok(`${base}/raw/upload/awer/acme/chat/user1/a.pdf`), true);
+  check("...the legacy folder", ok(`${base}/image/upload/v1/cleano/chat/user1/a.jpg`), true);
+  check("someone else's folder", ok(`${base}/image/upload/v1/awer/acme/chat/user2/a.jpg`), false);
+  check("another company's folder", ok(`${base}/image/upload/v1/awer/other/chat/user1/a.jpg`), false);
+  check("the folder nested deeper", ok(`${base}/image/upload/v1/x/awer/acme/chat/user1/a.jpg`), false);
+  check("the folder after a transformation", ok(`${base}/image/upload/c_fill,w_9/awer/acme/chat/user1/a.jpg`), false);
+  check("a fetch delivery, not an upload", ok(`${base}/image/fetch/awer/acme/chat/user1/a.jpg`), false);
+  check("another cloud", ok("https://res.cloudinary.com/evil/image/upload/v1/awer/acme/chat/user1/a.jpg"), false);
+  check("the folder with no file", ok(`${base}/image/upload/v1/awer/acme/chat/user1/`), false);
+  check("a dot in the slug is literal", isSendersChatAsset(`${base}/image/upload/awer/aXme/chat/user1/a.jpg`, "a.me", "user1", "demo"), false);
 }
 
 // ── The body cap counts bytes, while streaming ────────────────────────────
