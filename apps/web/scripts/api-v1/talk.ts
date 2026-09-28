@@ -203,10 +203,11 @@ export async function runTalkChecks(t: TalkHarness): Promise<void> {
       history,
     );
     const afterEdit = await get(`/api/v1/team/channels/${defaultId}/messages`, teammate);
+    const served = afterEdit.body?.items?.find((m: { id: string }) => m.id === mid);
     check(
-      "team edit: nobody is served the old body",
-      !JSON.stringify(afterEdit.body).includes(String(r.body?.body)) && !JSON.stringify(ed.body).includes(String(r.body?.body)),
-      afterEdit.body?.items?.find((m: { id: string }) => m.id === mid),
+      "team edit: nobody is served the old body or the history",
+      served?.body === ee.body && !JSON.stringify(afterEdit.body).includes("previousBody") && !JSON.stringify(ed.body).includes("previousBody"),
+      served,
     );
     const reuse = await send("PATCH", path, cleaner, { ...ee, body: "different" });
     check("team edit: the same key with another body is 422", reuse.status === 422, reuse.body);
