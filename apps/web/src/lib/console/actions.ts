@@ -640,6 +640,7 @@ export async function resendOwnerCredentials(orgId: string): Promise<ApproveResu
       });
       // A rescue is usually because the owner lost access — possibly to
       // someone else. Whoever holds a session with the old password loses it.
+      await tx.pushDevice.deleteMany({ where: { userId: owner.id } });
       await tx.session.deleteMany({ where: { userId: owner.id } });
     });
   } catch (e) {

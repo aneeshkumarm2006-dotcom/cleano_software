@@ -395,6 +395,36 @@ async function main() {
       check("devices: unregistering your own token removes it", mine.status === 200 && gone === 0);
       check("devices: stored in the caller's company", row?.organizationId === F.orgA.id);
     }
+    {
+      // A token belongs to the session that registered it, and ends with it.
+      const token = `ExponentPushToken[${randomUUID()}]`;
+      const phone = await signIn(HOST_A, F.users.cleaner.email);
+      await call("POST", HOST_A, "/api/v1/devices", { cookie: phone, body: { token, platform: "ios", appVersion: "1.0.0 (1)" } });
+      const row = await db.pushDevice.findFirst({ where: { token }, select: { sessionId: true } });
+      const sess = row?.sessionId ? await db.session.findUnique({ where: { id: row.sessionId }, select: { userId: true } }) : null;
+      check("devices: the registering session is stored", sess?.userId === F.users.cleaner.id, row);
+      const out = await call("POST", HOST_A, "/api/auth/sign-out", {
+        cookie: phone,
+        body: {},
+        noAppHeaders: true,
+        headers: { Origin: `http://${HOST_A}` },
+      });
+      const left = await db.pushDevice.count({ where: { token } });
+      check("devices: signing out deletes that session's token", out.status === 200 && left === 0, { status: out.status, left });
+
+      // One company at a time: registering in B removes the token from A.
+      const moving = `ExponentPushToken[${randomUUID()}]`;
+      await call("POST", HOST_A, "/api/v1/devices", { cookie, body: { token: moving, platform: "ios", appVersion: "1.0.0 (1)" } });
+      const b = await signIn(HOST_B, F.users.bCleaner.email);
+      const inB = await call("POST", HOST_B, "/api/v1/devices", { cookie: b, body: { token: moving, platform: "ios", appVersion: "1.0.0 (1)" } });
+      const rows = await db.pushDevice.findMany({ where: { token: moving }, select: { organizationId: true } });
+      check(
+        "devices: registering in another company removes the old company's row",
+        inB.status === 200 && rows.length === 1 && rows[0]?.organizationId === F.orgB.id,
+        rows,
+      );
+      await db.pushDevice.deleteMany({ where: { token: moving } });
+    }
 
     // ── Jobs ──────────────────────────────────────────────────────────────
     {
@@ -796,6 +826,10 @@ async function main() {
     // ── Password change ends the other sessions ───────────────────────────
     {
       const other = await signIn(HOST_A, F.users.cleaner.email);
+      const keptToken = `ExponentPushToken[${randomUUID()}]`;
+      const otherToken = `ExponentPushToken[${randomUUID()}]`;
+      await call("POST", HOST_A, "/api/v1/devices", { cookie, body: { token: keptToken, platform: "ios", appVersion: "1.0.0 (1)" } });
+      await call("POST", HOST_A, "/api/v1/devices", { cookie: other, body: { token: otherToken, platform: "ios", appVersion: "1.0.0 (1)" } });
       const wrong = await call("POST", HOST_A, "/api/v1/me/password", {
         cookie,
         body: { currentPassword: "wrong-password", newPassword: "Another-Pass-2026" },
@@ -810,6 +844,9 @@ async function main() {
       const theirs = await call("GET", HOST_A, "/api/v1/me", { cookie: other });
       check("me/password: this device stays signed in", mine.status === 200, mine.body);
       check("me/password: every other session ends", theirs.status === 401, theirs.body);
+      const keptRows = await db.pushDevice.count({ where: { token: keptToken } });
+      const otherRows = await db.pushDevice.count({ where: { token: otherToken } });
+      check("me/password: this device's push token stays, the others' go", keptRows === 1 && otherRows === 0, { keptRows, otherRows });
     }
 
     // ── Shared rate limit (lib/shared-rate-limit.ts) ──────────────────────

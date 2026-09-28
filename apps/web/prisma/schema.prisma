@@ -160,6 +160,7 @@ model Session {
   /// migrations here are additive.
   lastRequestAt DateTime?
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushDevices   PushDevice[]
 }
 
 model Verification {
@@ -3398,13 +3399,18 @@ model PushDevice {
   /// ios | android
   platform       String
   appVersion     String
+  /// The session that registered it. Deleting the session (sign-out,
+  /// revocation, reset) deletes this row. Null for rows from before it.
+  sessionId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session        Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, token])
   @@index([userId])
   @@index([organizationId])
+  @@index([sessionId])
 }
 
 model JobAssignmentInvite {

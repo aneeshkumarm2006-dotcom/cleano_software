@@ -10,6 +10,7 @@ import { db } from "@/lib/org-db";
 import { orgFromContext } from "@/lib/org-context";
 import { originForSlug, requestOrigin } from "@/lib/org-url";
 import { sendAccountEmail } from "@/lib/email";
+import { endPushDevicesOf } from "@/lib/session-revocation";
 import { betterAuthRateLimitStorage } from "@/lib/shared-rate-limit";
 
 /**
@@ -364,6 +365,9 @@ export const auth = betterAuth({
       db.user
         .update({ where: { id: user.id }, data: { mustChangePassword: false } })
         .catch((e) => console.error("clear mustChangePassword", e));
+      // Sessions end with the reset (revokeSessionsOnPasswordReset) and their
+      // push tokens with them; this also clears tokens older than that link.
+      await endPushDevicesOf(user.id).catch((e) => console.error("reset: push devices", e));
       const role = await roleOf(user.id);
       sendAccountEmail({
         to: user.email,

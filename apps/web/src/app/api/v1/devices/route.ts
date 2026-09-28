@@ -15,5 +15,5 @@ export const POST = v1Route(
     response: DeviceResponse,
     limit: { name: "devices", max: 20, windowMs: 60 * 60_000 },
   },
-  (ctx) => registerDevice(ctx.actor, ctx.body),
+  (ctx) => registerDevice(ctx.actor, ctx.session.id, ctx.body),
 );
