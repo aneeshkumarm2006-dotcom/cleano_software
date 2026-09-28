@@ -1,5 +1,6 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
@@ -324,6 +325,7 @@ export async function sendGroupMessage(
   if (!res.ok) {
     return { success: false, error: res.status === 404 ? "Channel not found" : res.message };
   }
+  fireEffects(res.effects);
   const m = res.value.row;
   return {
     success: true,

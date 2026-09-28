@@ -20,7 +20,8 @@ import { sendAdminJobIssue } from "@/lib/email";
 import { db } from "@/lib/org-db";
 
 import type { Actor } from "../actor";
-import { effect } from "../effects";
+import { effect, type Effect } from "../effects";
+import { urgentIssuePush } from "../push/notify";
 import { failure, notFound, ok, type Result } from "../result";
 import {
   decodeTimeCursor,
@@ -195,7 +196,7 @@ export async function reportJobIssueFor(
   // After the write. The row is the record; a mail server having a bad minute
   // must not be the reason the report is lost. URGENT and NORMAL both mail at
   // once; URGENT is marked as such in the mail and the office's bell.
-  const effects = [
+  const effects: Effect[] = [
     effect("admin job issue email", () =>
       sendAdminJobIssue({
         jobId: job.id,
@@ -209,6 +210,8 @@ export async function reportJobIssueFor(
       }),
     ),
   ];
+
+  if (urgency === "URGENT") effects.push(urgentIssuePush(issue.id, job.id, actor.userId, cleanerName));
 
   return ok({ issueId: issue.id, issue: issueView(issue) }, effects);
 }

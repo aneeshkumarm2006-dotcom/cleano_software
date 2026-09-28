@@ -1,5 +1,7 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
+import { jobPush } from "@/server/push/notify";
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -210,6 +212,7 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
             isLastMinute: true,
             bonusUsd: LAST_MINUTE_CLAIM_BONUS_USD,
           });
+          fireEffects([jobPush("last_minute", jobId, broadcast.map((u) => u.id), employeeId)]);
           for (const u of broadcast) {
             if (!u.email) continue;
             sendProviderLastMinuteOpening({

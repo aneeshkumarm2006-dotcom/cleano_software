@@ -36,6 +36,6 @@ export const POST = v1Route(
       now: ctx.receivedAt,
     });
     if (!res.ok) return res;
-    return ok(res.value.message);
+    return ok(res.value.message, res.effects);
   },
 );

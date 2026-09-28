@@ -1,5 +1,7 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
+import { announcementPush } from "@/server/push/notify";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
@@ -252,6 +254,7 @@ export async function createAnnouncement(input: {
       authorName: a.user.name ?? "Team Cleano",
     },
   });
+  fireEffects([announcementPush(a.user.id)]);
 
   return {
     success: true,

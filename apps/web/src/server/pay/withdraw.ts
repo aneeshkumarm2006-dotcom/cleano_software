@@ -36,6 +36,7 @@ import {
 
 import type { Actor } from "../actor";
 import { effect, type Effect } from "../effects";
+import { approvalPush } from "../push/notify";
 import { failure, ok, type Result } from "../result";
 import { readBalance } from "./balance";
 
@@ -168,6 +169,7 @@ export async function requestWithdrawalService(
   }
   effects.push(
     effect("withdrawal.admin-email", () => sendAdminPayoutRequest({ providerName: who, amount: netDollars })),
+    approvalPush("withdrawal", outcome.row.id, actor.userId, actor.name),
   );
 
   return ok(

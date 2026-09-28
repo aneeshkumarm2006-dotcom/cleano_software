@@ -39,6 +39,7 @@ import { db } from "@/lib/org-db";
 import { fmtDateTime } from "@/lib/time";
 
 import type { Actor } from "../actor";
+import { timeRequestDecidedPush } from "../push/notify";
 import { failure, notFound, ok, type Failure, type Result } from "../result";
 import { afterKeyset, badCursor, decodeKeyset, pageBy } from "./cursor";
 import { clientNameFor } from "./scope";
@@ -457,7 +458,7 @@ export async function decideTimeRequest(
       (input.note ? ` Decision note: ${input.note}` : ""),
   }).catch(() => {});
 
-  return ok({ requestId: req.id, jobId: req.jobId });
+  return ok({ requestId: req.id, jobId: req.jobId }, [timeRequestDecidedPush(req.id, actor.userId)]);
 }
 
 /** The phone's decision: the service above, answered with the item as it now stands. */
@@ -490,5 +491,5 @@ export async function decideTimeItemFor(
   const row = await db.timeLogChangeRequest.findFirst({ where: { id }, select: ITEM_SELECT });
   if (!row) return notFound(NOT_FOUND);
   const [item] = await toItems(actor, [row]);
-  return ok(item);
+  return ok(item, res.effects);
 }

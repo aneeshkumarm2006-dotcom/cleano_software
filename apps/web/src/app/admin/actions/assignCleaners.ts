@@ -1,5 +1,7 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
+import { jobPush } from "@/server/push/notify";
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -259,6 +261,13 @@ export async function assignCleaners(input: {
         })
         .catch(() => {});
     }
+
+    // On their phones: the people added, and the people taken off.
+    const removed = [...previousIds].filter((id) => !input.cleanerIds.includes(id));
+    fireEffects([
+      jobPush("assigned", input.jobId, newlyAdded, session.user.id),
+      jobPush("unassigned", input.jobId, removed, session.user.id),
+    ]);
 
     revalidatePath(`/admin/jobs/${input.jobId}`);
     revalidatePath("/admin/jobs");

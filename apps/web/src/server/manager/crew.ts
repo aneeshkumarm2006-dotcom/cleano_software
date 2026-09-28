@@ -41,6 +41,7 @@ import { fmtDate, fmtTime } from "@/lib/time";
 
 import type { Actor } from "../actor";
 import { effect, type Effect } from "../effects";
+import { jobPush } from "../push/notify";
 import { failure, notFound, ok, type Result } from "../result";
 import { jobInView, managerView } from "./scope";
 import { managerJobById } from "./team";
@@ -285,6 +286,7 @@ export async function setCrewFor(
       justGotFirstCleaner: roster.length === 0 && ids.length > 0,
       // Invites go to people new to the roster, as the web's newlyAdded.
       invited: ids.filter((id) => !roster.includes(id)),
+      removed: [...crewNow].filter((id) => !ids.includes(id)),
       overridden: warnings.map((w) => w.message),
     };
   });
@@ -313,6 +315,10 @@ export async function setCrewFor(
       effects.push(effect("crew: customer modified email", () => sendCustomerBookingModified({ ...lifecycle, to })));
     }
   }
+  effects.push(
+    jobPush("assigned", jobId, outcome.invited, actor.userId),
+    jobPush("unassigned", jobId, outcome.removed, actor.userId),
+  );
   if (outcome.invited.length > 0) {
     const cleanerIds = outcome.invited;
     effects.push(effect("crew: invites", () => createAssignmentInvites({ jobId, cleanerIds })));
@@ -429,6 +435,10 @@ export async function addCleanerFor(
   if (outcome.kind === "refused") return failure(outcome.status, outcome.code, outcome.message);
   const updated = await managerJobById(view, jobId, now);
   if (!updated) return notFound("This job isn't available.");
-  // No emails: the web's bulk path sends none, and this is that path.
-  return ok({ job: updated, overridden: outcome.overridden });
+  // No emails: the web's bulk path sends none, and this is that path. The
+  // person added is told on their phone, as for any other crew change.
+  return ok(
+    { job: updated, overridden: outcome.overridden },
+    outcome.kind === "done" ? [jobPush("assigned", jobId, [cleaner.id], actor.userId)] : [],
+  );
 }

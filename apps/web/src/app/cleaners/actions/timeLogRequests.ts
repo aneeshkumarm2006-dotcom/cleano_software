@@ -11,6 +11,8 @@
 // `decideTimeLogChange` on the admin side is what applies it, and it does so
 // through the same correction path an admin uses by hand.
 
+import { fireEffects } from "@/server/effects";
+import { approvalPush } from "@/server/push/notify";
 import { auth } from "@/lib/auth";
 import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
@@ -139,7 +141,7 @@ export async function requestTimeLogChange(input: {
       };
     }
 
-    await db.timeLogChangeRequest.create({
+    const created = await db.timeLogChangeRequest.create({
       data: {
         jobId: job.id,
         cleanerId,
@@ -150,7 +152,9 @@ export async function requestTimeLogChange(input: {
         requestedEnd,
         reason: check.reason.slice(0, TIME_LOG_REASON_MAX),
       },
+      select: { id: true },
     });
+    fireEffects([approvalPush("time", created.id, cleanerId, session.user.name ?? null)]);
 
     const changes = [
       describeChange("Start", originalStart, requestedStart, fmtDateTime),

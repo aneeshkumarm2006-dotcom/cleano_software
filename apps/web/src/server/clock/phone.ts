@@ -48,6 +48,7 @@ import { fmtDateTime } from "@/lib/time";
 
 import type { Actor } from "../actor";
 import { effect, type Effect } from "../effects";
+import { approvalPush } from "../push/notify";
 import { plannedMinutesOf } from "../jobs/detail";
 import { myClocks } from "../jobs/summary";
 import { failure, notFound, ok, type Failure, type Result } from "../result";
@@ -222,8 +223,9 @@ async function raiseCorrection(input: CorrectionInput): Promise<Effect[]> {
     fmt: (d) => fmtDateTime(d),
   }).slice(0, TIME_LOG_REASON_MAX);
 
+  let requestId: string;
   try {
-    await db.timeLogChangeRequest.create({
+    const created = await db.timeLogChangeRequest.create({
       data: {
         jobId: ctx.jobId,
         cleanerId: ctx.actor.userId,
@@ -241,7 +243,9 @@ async function raiseCorrection(input: CorrectionInput): Promise<Effect[]> {
         occurredAt: input.occurredAt,
         receivedAt: ctx.receivedAt,
       },
+      select: { id: true },
     });
+    requestId = created.id;
   } catch (e) {
     // The same event already raised its request: nothing more to say.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return [];
@@ -259,6 +263,7 @@ async function raiseCorrection(input: CorrectionInput): Promise<Effect[]> {
         severity: "WARN",
       }),
     ),
+    approvalPush("time", requestId, ctx.actor.userId, ctx.actor.name),
   ];
 }
 

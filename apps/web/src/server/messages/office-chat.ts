@@ -23,6 +23,7 @@ import { db } from "@/lib/org-db";
 
 import type { Actor } from "../actor";
 import { effect, type Effect } from "../effects";
+import { officeChatPush } from "../push/notify";
 import { failure, ok, type Result } from "../result";
 import { decodeCursor, NEWEST_FIRST, olderThan, pageOf } from "./cursor";
 import { isSendersChatAsset } from "./stored-url";
@@ -273,6 +274,7 @@ export async function sendOfficeMessage(
         recipientOnline,
       }),
     ),
+    officeChatPush(actor.userId, actor.name),
   ];
   return ok({ message: toOfficeMessage(created, actor, slug), row: created }, effects);
 }

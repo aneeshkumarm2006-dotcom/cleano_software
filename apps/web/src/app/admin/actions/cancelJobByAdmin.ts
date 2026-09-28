@@ -1,5 +1,7 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
+import { jobPush } from "@/server/push/notify";
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -160,6 +162,8 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
         }).catch(() => {});
       }
     }
+    // The same people, on their phones (the job's switch is checked inside).
+    fireEffects([jobPush("cancelled", input.jobId, job.cleaners.map((c) => c.id), session.user.id)]);
 
     revalidatePath(`/admin/jobs/${input.jobId}`);
     revalidatePath("/admin/jobs");

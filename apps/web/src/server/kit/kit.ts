@@ -26,6 +26,7 @@ import { db } from "@/lib/org-db";
 import { adjustWarehouseStock } from "@/lib/stock.server";
 
 import type { Actor } from "../actor";
+import { approvalPush } from "../push/notify";
 import { failure, notFound, ok, type Failure, type Result } from "../result";
 
 export const MAX_KIT_QUANTITY = 1000;
@@ -398,7 +399,12 @@ export async function requestRestock(
     return { results };
   }, STOCK_TX);
   if ("failed" in outcome) return outcome.failed!;
-  return ok({ results: outcome.results });
+  // One push for the whole request, however many lines it had.
+  const created = outcome.results.find((r) => r.outcome === "CREATED");
+  return ok(
+    { results: outcome.results },
+    created ? [approvalPush("kit", created.request.id, actor.userId, actor.name)] : [],
+  );
 }
 
 // ── Storage locations and pickups ───────────────────────────────────────────

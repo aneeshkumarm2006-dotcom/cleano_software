@@ -6,6 +6,8 @@ import { isCategoryAllowed, serviceLabelMap } from "@bookmops/core/services";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { computeJobPayout } from "@bookmops/core/pay";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { fireEffects } from "@/server/effects";
+import { jobPush } from "@/server/push/notify";
 
 /**
  * Tell the cleaners who could claim it that a job is on the board.
@@ -105,6 +107,9 @@ export async function notifyNewJobPosted(jobId: string): Promise<void> {
         ? await getCleanerRateInputs(eligible.map((c) => c.id)).catch(() => null)
         : null;
 
+    // The same people, on their phones: the EmailLog row below is the dedupe
+    // for both, so a re-saved job pushes nobody twice.
+    const offered: string[] = [];
     for (const cleaner of eligible) {
       // Recorded before sending, and only once per cleaner per job: this is the
       // dedupe as well as the log, so re-saving a job cannot re-notify anyone.
@@ -130,6 +135,7 @@ export async function notifyNewJobPosted(jobId: string): Promise<void> {
         },
         select: { id: true },
       });
+      offered.push(cleaner.id);
 
       let estPay: number | null = null;
       if (rates) {
@@ -156,6 +162,7 @@ export async function notifyNewJobPosted(jobId: string): Promise<void> {
         logId: log.id,
       }).catch((e) => console.error("notifyNewJobPosted send", e));
     }
+    fireEffects([jobPush("offered", job.id, offered)]);
   } catch (e) {
     // Item 12: "If email fails, system should log the failure for admin." The
     // per-send failures land in EmailLog, which the admin can read; this catch

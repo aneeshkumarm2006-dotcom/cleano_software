@@ -28,6 +28,7 @@ import { formatCents } from "@/lib/withdrawal-rules";
 
 import type { Actor } from "../actor";
 import { effect, type Effect } from "../effects";
+import { withdrawalDecidedPush } from "../push/notify";
 import { failure, notFound, ok, type Result } from "../result";
 import { lockWithdrawalsOf } from "../pay/withdraw";
 import { afterKeyset, badCursor, decodeKeyset, pageBy } from "./cursor";
@@ -204,7 +205,7 @@ export async function decideWithdrawal(
       (input.via === "app" ? " from the app." : "."),
   }).catch(() => {});
 
-  const effects: Effect[] = [];
+  const effects: Effect[] = [withdrawalDecidedPush(id, actor.userId)];
   const to = updated.employee.email;
   if (t.to === "COMPLETED" && to) {
     effects.push(

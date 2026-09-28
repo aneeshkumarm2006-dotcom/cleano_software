@@ -29,6 +29,7 @@ import { db } from "@/lib/org-db";
 
 import type { Actor } from "../actor";
 import { effect } from "../effects";
+import { officeReplyPush } from "../push/notify";
 import { failure, notFound, ok, type Result } from "../result";
 import { decodeCursor, NEWEST_FIRST, olderThan, pageOf } from "../messages/cursor";
 import {
@@ -318,6 +319,7 @@ export async function replyAsOffice(
         recipientOnline,
       }),
     ),
+    officeReplyPush(person.id, actor.userId, actor.name),
   ]);
 }
 

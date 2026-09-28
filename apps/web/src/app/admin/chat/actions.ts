@@ -16,6 +16,7 @@ import { orgAssetFolder } from "@/lib/asset-folder";
 import { isOwnerAdminRole, isStaffRole } from "@/lib/role-routing";
 import { actorFromSession } from "@/server/actor";
 import { fireEffects } from "@/server/effects";
+import { officeReplyPush } from "@/server/push/notify";
 import {
   isOwnConversation,
   markOfficeRead,
@@ -420,6 +421,7 @@ export async function sendChatMessage(
     body: trimmed,
     recipientOnline,
   }).catch((err) => console.error("notifyChatEmail failed", err));
+  fireEffects([officeReplyPush(conversation.employeeId, a.user.id, a.user.name)]);
 
   return { success: true, data: toMessageDTO(message, true) };
 }

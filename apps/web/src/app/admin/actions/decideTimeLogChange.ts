@@ -32,6 +32,7 @@
 // (server/manager/time.ts, the service the phone's approvals also run), so a
 // change that can't be applied takes the claim back with it.
 
+import { fireEffects } from "@/server/effects";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -95,6 +96,7 @@ export async function decideTimeLogChange(input: {
       },
     );
     if (!res.ok) return { success: false, error: res.message };
+    fireEffects(res.effects);
 
     revalidatePath("/admin/notifications");
     revalidatePath(`/admin/jobs/${res.value.jobId}`);

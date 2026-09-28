@@ -1,5 +1,7 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
+import { approvalPush } from "@/server/push/notify";
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -56,6 +58,7 @@ export async function createInventoryRequest(
         { items: [{ productId: input.productId, quantity: input.quantity }], reason },
       );
       if (!res.ok) return { success: false, error: res.message };
+      fireEffects(res.effects);
       const [line] = res.value.results;
       const request = await db.inventoryRequest.findFirst({ where: { id: line.request.id } });
       if (line.outcome === "ALREADY_PENDING") {
@@ -126,6 +129,7 @@ export async function createInventoryRequest(
         employeeId: session.user.id,
       },
     });
+    fireEffects([approvalPush("kit", request.id, session.user.id, session.user.name ?? null)]);
 
     revalidatePath("/cleaners/my-inventory");
     revalidatePath("/cleaners/my-inventory/resolve");

@@ -26,6 +26,6 @@ export const POST = v1Route(
     });
     if (!res.ok) return res;
     if (res.value.results.some((r) => r.outcome === "CREATED")) revalidateAfterRestockRequest();
-    return ok({ results: res.value.results.map((r) => ({ productId: r.productId, outcome: r.outcome })) });
+    return ok({ results: res.value.results.map((r) => ({ productId: r.productId, outcome: r.outcome })) }, res.effects);
   },
 );

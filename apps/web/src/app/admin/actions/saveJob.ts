@@ -1,5 +1,7 @@
 "use server";
 
+import { fireEffects } from "@/server/effects";
+import { jobPush } from "@/server/push/notify";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
@@ -1298,6 +1300,7 @@ export async function saveJob(formData: FormData) {
 
           // Notify each assigned cleaner — email + app-push alert.
           // Gated by the per-booking notifyProvider toggle.
+          fireEffects([jobPush("cancelled", editingJobId, existingJob.cleaners.map((c) => c.id), session.user.id)]);
           for (const c of existingJob.notifyProvider ? existingJob.cleaners : []) {
             if (c.email) {
               sendProviderBookingCanceled({
@@ -1379,6 +1382,23 @@ export async function saveJob(formData: FormData) {
             jobId: editingJobId,
             cleanerIds: cleanersAdded,
           });
+        }
+
+        // On their phones: added, taken off, or the start moved for those
+        // still on it (the job's switch is checked inside).
+        {
+          const removed = teamSubmitted ? existingCleanerIds.filter((id) => !effectiveCleanerIds.includes(id)) : [];
+          // Only when the form posted a date (see the reschedule guard above).
+          const moved =
+            !!(startDate && startTime && jobData.startTime) &&
+            jobData.startTime.getTime() !== existingJob.startTime.getTime();
+          fireEffects([
+            jobPush("assigned", editingJobId, cleanersAdded, session.user.id),
+            jobPush("unassigned", editingJobId, removed, session.user.id),
+            ...(moved
+              ? [jobPush("time_changed", editingJobId, effectiveCleanerIds.filter((id) => previousCleanerIds.has(id)), session.user.id)]
+              : []),
+          ]);
         }
 
         // Provider app-push for newly assigned cleaners ("New booking" for them).
@@ -1602,6 +1622,7 @@ export async function saveJob(formData: FormData) {
           jobId: newJob.id,
           cleanerIds,
         });
+        fireEffects([jobPush("assigned", newJob.id, cleanerIds, session.user.id)]);
       }
 
       // ── Recurring series ─────────────────────────────────────────────

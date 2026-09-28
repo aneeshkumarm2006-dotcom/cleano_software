@@ -27,6 +27,7 @@ import { requireOrgId } from "@/lib/org";
 import { db } from "@/lib/org-db";
 
 import type { Actor } from "../actor";
+import { teamMessagePush } from "../push/notify";
 import { failure, notFound, ok, type Result } from "../result";
 import { BLOCKED, blockedEitherWay, blockedIdsFor } from "./blocks";
 import { decodeCursor, NEWEST_FIRST, olderThan, pageOf } from "./cursor";
@@ -381,7 +382,8 @@ export async function sendTeamMessage(
       },
       select: TEAM_MESSAGE_SELECT,
     });
-    return ok({ message: toTeamMessage(row, actor), row });
+    // Only a message just written pushes; either replay above returns without.
+    return ok({ message: toTeamMessage(row, actor), row }, [teamMessagePush(channel.id, actor.userId, actor.name)]);
   } catch (e) {
     if (input.clientEventId && e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const again = await findPrior();
