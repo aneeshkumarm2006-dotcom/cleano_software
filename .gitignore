@@ -1,8 +1,9 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Patterns without a leading slash match in every app and package, which is
+# what a monorepo needs: apps/web/.next is as much a build artefact as .next was.
 
 # dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -11,14 +12,14 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store
@@ -30,7 +31,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — local secrets, one set per app, never committed
 .env*
 
 # vercel
@@ -40,23 +41,24 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/src/generated/prisma
-
 # Data exports / imports (may contain PII)
 *.csv
 
 # Design handoff reference (not shipped)
 .design-ref/
-.env.e2e
-scripts/shots/
-scripts/shots-all/
-scripts/shots-cleaner/
+
+# Screenshot output from the review and verify scripts
+shots/
+shots-all/
+shots-cleaner/
 
 # Browser-test harness: the scripts and FINDINGS.md are worth keeping, but
 # accounts.json holds a login password for the throwaway test users. Never
 # commit a credential file, even for accounts that have since been deleted.
-_bt/accounts.json
+**/_bt/accounts.json
 
-# Playwright MCP session artifacts and review screenshots
+# Playwright MCP session artifacts
 .playwright-mcp/
-shots/
+
+# Turborepo local cache and logs
+.turbo/

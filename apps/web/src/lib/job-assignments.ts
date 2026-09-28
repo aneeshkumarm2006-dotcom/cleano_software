@@ -1,0 +1,442 @@
+// Per-cleaner JobAssignment sync + status helpers (client-fixes item 9).
+//
+// JobAssignment rows complement the implicit Job.cleaners M2M with a live
+// per-cleaner status (ASSIGNED → ON_THE_WAY → CLOCKED_IN → CLOCKED_OUT →
+// COMPLETED / CANCELLED) and timestamps. Legacy jobs created before this
+// feature have no rows — read-side code derives a fallback status from the
+// job-level clockInTime/clockOutTime/onMyWayAt fields instead.
+
+import { db } from "@/lib/org-db";
+import type { ScopedTx } from "@/lib/db-scoped";
+import type { JobCleanerStatus, Prisma } from "@prisma/client";
+import { notifyAdmins } from "@/lib/admin-alerts";
+import {
+  availabilityWarning,
+  dateKeyToStoredDate,
+  evaluateAvailability,
+  windowFromInstants,
+  type AvailabilityEvaluation,
+  type AvailabilityWindow,
+} from "@/lib/availability";
+import { categoryMismatchWarning } from "@bookmops/core/services";
+import type { AvailabilityConflict } from "@/app/admin/actions/checkAvailability.types";
+
+/**
+ * The job's lead cleaner (`Job.employeeId`) for a given assigned team.
+ *
+ * `employeeId` is the legacy single-cleaner column that the cleaner app's
+ * my-jobs query, `claimJob` and `bulkAssignCleaner` all read as "the cleaner on
+ * this job". It must therefore always point at a real member of the team — it
+ * is NOT a "created by" field, which is what the admin job forms were using it
+ * as (fix list items 3 + 4).
+ *
+ * An existing lead who is still on the team is kept, so re-saving a job never
+ * reshuffles who the lead is; otherwise the first assigned cleaner takes over,
+ * and an empty team clears it.
+ */
+export function resolveJobLead(
+  currentLeadId: string | null | undefined,
+  cleanerIds: string[]
+): string | null {
+  if (currentLeadId && cleanerIds.includes(currentLeadId)) return currentLeadId;
+  return cleanerIds[0] ?? null;
+}
+
+/**
+ * Reconcile JobAssignment rows with the cleaners currently assigned to a job.
+ * Upserts an ASSIGNED row per cleaner (existing rows keep their live status)
+ * and removes rows for cleaners no longer on the job, preserving CANCELLED
+ * rows as history.
+ */
+export async function syncJobAssignments(
+  jobId: string,
+  cleanerIds: string[],
+  // A transaction's client, when the caller is inside one (the v1 crew
+  // change); the org-scoped client otherwise, as every web caller has it.
+  client: ScopedTx = db
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
+
+  try {
+    // Remove rows for cleaners taken off the job (keep CANCELLED history).
+    await client.jobAssignment.deleteMany({
+      where: {
+        jobId,
+        cleanerId: { notIn: ids },
+        status: { not: "CANCELLED" },
+      },
+    });
+
+    // Sept 17, item 22: "hourly rate should default from the cleaner employee
+    // profile". Read once for the whole crew rather than per cleaner.
+    //
+    // It SEEDS a new row and nothing else. Writing the figure onto the
+    // assignment, where an admin can see and change it, is the difference
+    // between a default and a silent repricing: if the profile rate were read
+    // at pay time instead, raising someone's rate today would quietly change
+    // what they are owed for work already scheduled — and for an HOURLY job,
+    // work already done but not yet paid.
+    let seedRates = new Map<string, number>();
+    if (ids.length > 0) {
+      const job = await client.job.findFirst({
+        where: { id: jobId },
+        select: { payType: true },
+      });
+      if (job?.payType === "HOURLY") {
+        const profiles = await client.user.findMany({
+          where: { id: { in: ids }, defaultHourlyRate: { not: null } },
+          select: { id: true, defaultHourlyRate: true },
+        });
+        seedRates = new Map(
+          profiles
+            .filter((u) => (u.defaultHourlyRate ?? 0) > 0)
+            .map((u) => [u.id, u.defaultHourlyRate as number]),
+        );
+      }
+    }
+
+    for (const cleanerId of ids) {
+      const seed = seedRates.get(cleanerId);
+      await client.jobAssignment.upsert({
+        where: { jobId_cleanerId: { jobId, cleanerId } },
+        // Existing rows keep whatever live status they already reached — and
+        // whatever rate an admin has already set on them. A re-save of the
+        // team must not push the profile rate back over a job-specific one.
+        update: {},
+        create: {
+          jobId,
+          cleanerId,
+          status: "ASSIGNED",
+          ...(seed ? { hourlyRate: seed } : {}),
+        },
+      });
+    }
+    return { ok: true };
+  } catch (e) {
+    // Previously swallowed: the job saved, the per-cleaner rows didn't, and the
+    // admin was told the save succeeded while the assignment quietly reverted
+    // on reopen. The caller now decides what to surface (fix list item 4).
+    console.error("syncJobAssignments failed", jobId, e);
+    return {
+      ok: false,
+      error:
+        "The job was saved, but the cleaner assignment could not be recorded. Reopen the job and set the cleaners again.",
+    };
+  }
+}
+
+/**
+ * Record a status transition on ONE cleaner's assignment row. Upserts so
+ * legacy jobs without rows still start tracking from the first action.
+ */
+export async function setAssignmentProgress(
+  jobId: string,
+  cleanerId: string,
+  data: {
+    status: JobCleanerStatus;
+    onMyWayAt?: Date;
+    clockInTime?: Date;
+    clockOutTime?: Date;
+  }
+) {
+  try {
+    await db.jobAssignment.upsert({
+      where: { jobId_cleanerId: { jobId, cleanerId } },
+      update: data,
+      create: { jobId, cleanerId, ...data },
+    });
+  } catch (e) {
+    console.error("setAssignmentProgress failed", jobId, cleanerId, e);
+  }
+}
+
+/**
+ * Who may be put on a job's crew: a cleaner or field lead of THIS company who
+ * is switched on and not archived. The same roles the Team card's picker
+ * lists (listAssignableCleaners), plus the two states it doesn't filter.
+ *
+ * The assign actions take raw user ids from the client and connect them
+ * straight onto `Job.cleaners`, so the picker was the only thing standing
+ * between a job and an arbitrary id: an owner's, a customer's, a switched-off
+ * cleaner's. `db` is the organization-scoped client, so an id from another
+ * company simply isn't found.
+ */
+export const ASSIGNABLE_CREW_WHERE = {
+  role: { in: ["EMPLOYEE", "FIELD_LEAD"] as ("EMPLOYEE" | "FIELD_LEAD")[] },
+  isActive: true,
+  deletedAt: null,
+} satisfies Prisma.UserWhereInput;
+
+/** The ids in `ids` that may NOT be assigned (see ASSIGNABLE_CREW_WHERE). */
+export async function unassignableCrewIds(ids: string[]): Promise<string[]> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return [];
+  const ok = await db.user.findMany({
+    where: { id: { in: unique }, ...ASSIGNABLE_CREW_WHERE },
+    select: { id: true },
+  });
+  const okIds = new Set(ok.map((u) => u.id));
+  return unique.filter((id) => !okIds.has(id));
+}
+
+/**
+ * Spec rule (item 12): a Trainee must always work paired with a Field Lead or
+ * an approved (Standard) cleaner — never solo (a lone trainee would be paid a
+ * flat 30% of the full price, which the spec forbids). Returns an error
+ * message when the assignment breaks the rule, or null when it's fine.
+ */
+export async function validateTraineePairing(
+  cleanerIds: string[]
+): Promise<string | null> {
+  const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
+  if (ids.length === 0) return null;
+  const crew = await db.user.findMany({
+    where: { id: { in: ids } },
+    select: { cleanerTier: true },
+  });
+  const hasTrainee = crew.some((c) => c.cleanerTier === "TRAINEE");
+  const hasApproved = crew.some((c) => c.cleanerTier !== "TRAINEE");
+  if (hasTrainee && !hasApproved) {
+    return "A Trainee must be paired with a Field Lead or an approved cleaner. Add one, or change the trainee's assignment.";
+  }
+  return null;
+}
+
+/**
+ * Spec item 12 backstop: a Trainee must never be left as the only worker on a
+ * job. The assign/claim/accept paths guard the entry, but an approved cleaner
+ * or Field Lead can still cancel or decline AFTER assignment, stranding the
+ * trainee solo. Call this after any such departure — if the remaining crew is
+ * trainees-only, it alerts admins so they can re-pair. Best-effort (never
+ * throws into the caller's transaction).
+ */
+export async function alertIfTraineeLeftUnpaired(jobId: string): Promise<void> {
+  try {
+    const job = await db.job.findUnique({
+      where: { id: jobId },
+      select: {
+        jobNumber: true,
+        clientName: true,
+        employeeId: true,
+        cleaners: { select: { id: true, name: true, cleanerTier: true } },
+        employee: { select: { id: true, cleanerTier: true } },
+      },
+    });
+    if (!job) return;
+
+    const crew = [
+      ...job.cleaners.map((c) => ({ id: c.id, tier: c.cleanerTier })),
+      ...(job.employee ? [{ id: job.employee.id, tier: job.employee.cleanerTier }] : []),
+    ];
+    const trainees = crew.filter((c) => c.tier === "TRAINEE");
+    const hasApproved = crew.some((c) => c.tier !== "TRAINEE");
+    // Only fire when there's at least one trainee and nobody approved to
+    // supervise. An empty crew is handled by the last-minute repost, not here.
+    if (trainees.length === 0 || hasApproved) return;
+
+    const traineeNames = job.cleaners
+      .filter((c) => c.cleanerTier === "TRAINEE")
+      .map((c) => c.name)
+      .join(", ");
+    await notifyAdmins({
+      severity: "WARNING",
+      title: `Trainee left unpaired — Job #${job.jobNumber}`,
+      message: `${traineeNames || "A trainee"} is now the only cleaner on Job #${job.jobNumber} (${job.clientName}) after a teammate cancelled/declined. Assign a Field Lead or approved cleaner.`,
+      relatedId: jobId,
+      relatedType: "Job",
+    });
+  } catch (e) {
+    console.error("alertIfTraineeLeftUnpaired", jobId, e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Availability conflicts (cleaner-app item 8)
+//
+// The DB-reading half of the availability engine. The pure evaluation rules live
+// in `src/lib/availability.ts` (shared with the client-side pickers); everything
+// here just loads the recurring weekly rules + one-off blocked dates and hands
+// them over. Conflicts are ALWAYS advisory — assignment actions surface them as
+// warnings and never hard-block, because admins must be able to override.
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate a wall-clock window for several employees in two queries.
+ * Returns a map keyed by employeeId; employees with no rules resolve to NO_DATA.
+ */
+export async function evaluateEmployeesAvailability(
+  employeeIds: string[],
+  window: AvailabilityWindow
+): Promise<Map<string, AvailabilityEvaluation>> {
+  const ids = Array.from(new Set(employeeIds.filter((id): id is string => !!id)));
+  const out = new Map<string, AvailabilityEvaluation>();
+  if (ids.length === 0) return out;
+
+  const storedDate = dateKeyToStoredDate(window.dateKey);
+
+  const [rules, exceptions] = await Promise.all([
+    db.employeeAvailability.findMany({
+      where: { employeeId: { in: ids } },
+      select: {
+        employeeId: true,
+        day: true,
+        startTime: true,
+        endTime: true,
+        isAvailable: true,
+        effectiveFrom: true,
+        effectiveTo: true,
+      },
+    }),
+    storedDate
+      ? db.availabilityException.findMany({
+          where: { employeeId: { in: ids }, date: storedDate },
+          select: { employeeId: true, date: true, reason: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  for (const id of ids) {
+    out.set(
+      id,
+      evaluateAvailability(
+        window,
+        rules.filter((r) => r.employeeId === id),
+        exceptions.filter((e) => e.employeeId === id)
+      )
+    );
+  }
+  return out;
+}
+
+/**
+ * Evaluate ONE employee against MANY windows (bulk assign across jobs) in two
+ * queries total — the rules and the blocked dates are loaded once, not per job.
+ * The returned array is index-aligned with `windows`.
+ */
+export async function evaluateEmployeeWindows(
+  employeeId: string,
+  windows: AvailabilityWindow[]
+): Promise<AvailabilityEvaluation[]> {
+  if (!employeeId || windows.length === 0) return [];
+
+  const dates = windows
+    .map((w) => dateKeyToStoredDate(w.dateKey))
+    .filter((d): d is Date => d !== null);
+
+  const [rules, exceptions] = await Promise.all([
+    db.employeeAvailability.findMany({
+      where: { employeeId },
+      select: {
+        day: true,
+        startTime: true,
+        endTime: true,
+        isAvailable: true,
+        effectiveFrom: true,
+        effectiveTo: true,
+      },
+    }),
+    dates.length > 0
+      ? db.availabilityException.findMany({
+          where: { employeeId, date: { in: dates } },
+          select: { date: true, reason: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  // evaluateAvailability matches the exception to the window's own date key, so
+  // handing it the whole set is safe.
+  return windows.map((w) => evaluateAvailability(w, rules, exceptions));
+}
+
+/**
+ * Conflicts for a set of cleaners against a job's scheduled window. Only
+ * genuine conflicts come back (AVAILABLE and NO_DATA are dropped), each with a
+ * ready-to-render warning line.
+ */
+export async function findAvailabilityConflicts(
+  cleanerIds: string[],
+  start: Date,
+  end?: Date | null
+): Promise<AvailabilityConflict[]> {
+  const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
+  if (ids.length === 0 || Number.isNaN(start.getTime())) return [];
+
+  try {
+    const window = windowFromInstants(start, end ?? null);
+    const [evaluations, cleaners] = await Promise.all([
+      evaluateEmployeesAvailability(ids, window),
+      db.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const conflicts: AvailabilityConflict[] = [];
+    for (const cleaner of cleaners) {
+      const ev = evaluations.get(cleaner.id);
+      if (!ev) continue;
+      const warning = availabilityWarning(cleaner.name, ev);
+      if (!warning) continue;
+      conflicts.push({
+        ...ev,
+        cleanerId: cleaner.id,
+        cleanerName: cleaner.name,
+        warning,
+      });
+    }
+    return conflicts;
+  } catch (e) {
+    // Advisory only — never fail an assignment because the warning lookup broke.
+    console.error("findAvailabilityConflicts failed", e);
+    return [];
+  }
+}
+
+/** One cleaner assigned outside their approved service categories. */
+export interface CategoryConflict {
+  cleanerId: string;
+  cleanerName: string;
+  /** Pre-formatted, non-blocking warning line. */
+  warning: string;
+}
+
+/**
+ * Service-category mismatches for a set of cleaners against a job's type
+ * (awerfixes.pdf item 3). The admin side WARNS and never blocks — the PDF is
+ * explicit about that — so this is shaped exactly like
+ * `findAvailabilityConflicts` and shares its fail-quiet contract: an empty array
+ * means "nothing to warn about", including when the lookup itself broke.
+ */
+export async function findCategoryConflicts(
+  cleanerIds: string[],
+  jobType: string | null | undefined
+): Promise<CategoryConflict[]> {
+  const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
+  if (ids.length === 0) return [];
+
+  try {
+    const cleaners = await db.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, allowedServiceCategories: true },
+    });
+
+    const conflicts: CategoryConflict[] = [];
+    for (const cleaner of cleaners) {
+      const warning = categoryMismatchWarning(
+        cleaner.name,
+        jobType,
+        cleaner.allowedServiceCategories
+      );
+      if (!warning) continue;
+      conflicts.push({
+        cleanerId: cleaner.id,
+        cleanerName: cleaner.name,
+        warning,
+      });
+    }
+    return conflicts;
+  } catch (e) {
+    console.error("findCategoryConflicts failed", e);
+    return [];
+  }
+}

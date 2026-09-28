@@ -1,0 +1,579 @@
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { redirect, notFound } from "next/navigation";
+import { db } from "@/lib/org-db";
+import { getSettings } from "@/lib/settings";
+import {
+  ADDON_INCLUDED_LABEL,
+  addOnAmountIsIncluded,
+  addOnLineTotal,
+  resolvePricingMode,
+} from "@/lib/job-money";
+import { sanitizeCleanerNotes } from "@bookmops/core/jobs";
+import { propertyTypeLabel, formatAddressLine } from "@bookmops/core/property";
+import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
+import { isAwaitingQuote, quoteStatusLabel } from "@/lib/quote-status";
+import { fmtDateTime } from "@/lib/time";
+import Link from "next/link";
+import { ArrowLeft, Download, MapPin, Users, CreditCard } from "lucide-react";
+import { StatusBadge, DateBadge } from "@/components/customer/atoms";
+import { Banner } from "@/components/customer/Field";
+import RequestActions from "./RequestActions";
+import JobChatThread from "@/components/JobChatThread";
+import BookingPaymentMethod from "./BookingPaymentMethod";
+import { storeTz } from "@/lib/timezone";
+import { getTaxRates } from "@/lib/tax.server";
+import { taxLines } from "@/lib/tax";
+
+function formatPrice(n: number | null | undefined) {
+  return `$${(n ?? 0).toFixed(2)}`;
+}
+
+// Curated, customer-safe labels for the portal activity feed. We never render
+// raw log descriptions (they can contain internal operational notes).
+const ACTIVITY_LABELS: Record<string, string> = {
+  CREATED: "Booking created",
+  STATUS_CHANGED: "Status updated",
+  PAYMENT_RECEIVED: "Payment received",
+  INVOICE_SENT: "Invoice sent",
+  CLOCKED_IN: "Cleaner arrived",
+  CLOCKED_OUT: "Cleaner finished",
+};
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: storeTz(),
+  });
+}
+function formatLongDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: storeTz(),
+  });
+}
+
+export default async function BookingDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+
+  const email = session.user.email?.toLowerCase();
+  const client = email
+    ? await db.client.findFirst({ where: { email } })
+    : null;
+  if (!client) redirect("/");
+
+  const job = await db.job.findUnique({
+    where: { id },
+    include: {
+      cleaners: { select: { id: true, name: true } },
+      addOns: { select: { name: true, price: true, quantity: true } },
+      logs: {
+        // Customer-safe lifecycle events only. Internal free-text logs
+        // (NOTE_ADDED, UPDATED, PRODUCT_USED, cleaner churn) are excluded so
+        // operational notes — e.g. fee-collection instructions — never leak.
+        where: {
+          action: {
+            in: [
+              "CREATED",
+              "STATUS_CHANGED",
+              "PAYMENT_RECEIVED",
+              "INVOICE_SENT",
+              "CLOCKED_IN",
+              "CLOCKED_OUT",
+            ],
+          },
+        },
+        select: {
+          id: true,
+          action: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+    },
+  });
+
+  if (!job || job.clientId !== client.id) notFound();
+
+  // Whether this booking's extras were already priced into what the customer
+  // paid. True on a final-price-override job — every web booking and every
+  // BookingKoala import — and the imported rows additionally carry no price at
+  // all, which is what the add-on list below has to say out loud instead of
+  // printing "+$0.00". Reads the stamped mode first and only falls back to the
+  // old provenance rule, so an admin who switched this booking to itemized
+  // pricing sees its add-ons priced here too (fix 2).
+  const addOnsIncludedInSubtotal =
+    resolvePricingMode(job) === "FINAL_PRICE";
+
+  const isUpcoming = new Date(job.startTime) >= new Date();
+  const {
+    "policy.cancellationFeeUsd": cancellationFeeUsd,
+    "policy.cancellationFeeWindowHours": cancellationWindowHours,
+    "customer.cancellationReasons": cancellationReasons,
+    "general.businessEmail": businessEmail,
+    "general.businessPhone": businessPhone,
+    "customer.providerRatingThreshold": providerRatingThreshold,
+  } = await getSettings([
+    "policy.cancellationFeeUsd",
+    "policy.cancellationFeeWindowHours",
+    "customer.cancellationReasons",
+    "general.businessEmail",
+    "general.businessPhone",
+    "customer.providerRatingThreshold",
+  ]);
+
+  // This workspace's own rates, for the price rows below (Sept 17, item 7).
+  const taxRates = await getTaxRates();
+
+  // #66: show an assigned cleaner's average rating to the customer only when it
+  // meets the configured threshold (and they have at least 3 ratings).
+  const cleanerIds = job.cleaners.map((c) => c.id);
+  const ratingAgg = cleanerIds.length
+    ? await db.employeeRating.groupBy({
+        by: ["employeeId"],
+        where: { employeeId: { in: cleanerIds }, excludedAt: null },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+    : [];
+  const cleanerRating = new Map<string, number>();
+  for (const r of ratingAgg) {
+    const avg = r._avg.rating ?? 0;
+    if (r._count.rating >= 3 && avg >= providerRatingThreshold) {
+      cleanerRating.set(r.employeeId, Math.round(avg * 10) / 10);
+    }
+  }
+  const isCompletedOrPaid = job.status === "COMPLETED" || job.status === "PAID";
+  const hasCancelRequest = !!job.cancellationRequestedAt;
+  const hasRescheduleRequest = !!job.rescheduleRequestedAt;
+  const hasRequest = hasCancelRequest || hasRescheduleRequest;
+
+  return (
+    <>
+      <header style={{ marginBottom: 32 }}>
+        <Link
+          href="/bookings"
+          className="cl-link-muted"
+          style={{
+            fontSize: 13,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 16,
+          }}>
+          <ArrowLeft size={14} /> Back to bookings
+        </Link>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}>
+          <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+            <DateBadge iso={job.startTime.toISOString()} />
+            <div className="cl-stack-8">
+              <p className="cl-eyebrow">Job #{job.jobNumber}</p>
+              <h1
+                className="cl-display"
+                style={{ fontSize: "clamp(32px, 4vw, 44px)" }}>
+                {formatLongDate(job.startTime.toISOString())}
+              </h1>
+              <p className="cl-subtitle" style={{ marginTop: 0, fontSize: 15 }}>
+                {formatTime(job.startTime.toISOString())}
+                {job.isFlexible ? " · Flexible (we'll confirm the time)" : ""}
+              </p>
+            </div>
+          </div>
+          <StatusBadge status={job.status} />
+        </div>
+      </header>
+
+      {hasRequest ? (
+        <div style={{ marginBottom: 24 }}>
+          <Banner kind="amber">
+            {hasCancelRequest
+              ? "Cancellation requested — awaiting confirmation from our team."
+              : "Reschedule requested — we'll be in touch."}
+            {hasCancelRequest && job.cancellationReason
+              ? ` Reason: ${job.cancellationReason}.`
+              : ""}
+          </Banner>
+        </div>
+      ) : null}
+
+      {job.status === "CANCELLED" && job.cancellationReason ? (
+        <div style={{ marginBottom: 24 }}>
+          <Banner kind="amber">
+            This booking was cancelled. Reason: {job.cancellationReason}.
+          </Banner>
+        </div>
+      ) : null}
+
+      {/* Post-construction quote state (PDF #9, Stage 11). Without this the
+          portal shows a provisional estimate under a "Total" heading with no
+          indication that the price isn't settled — the same misleading promise
+          the booking flow's estimate line used to make. */}
+      {job.quoteStatus === "PENDING_REVIEW" || job.quoteStatus === "QUOTED" ? (
+        <div style={{ marginBottom: 24 }}>
+          <Banner kind="amber">
+            {job.quoteStatus === "PENDING_REVIEW"
+              ? `${quoteStatusLabel(job.quoteStatus)} — we're reviewing your photos and will email your final price shortly. The total below is an estimate.`
+              : `${quoteStatusLabel(job.quoteStatus)} — check your email for the final price. Reply or call us to confirm and we'll lock in your date.`}
+          </Banner>
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 360px",
+          gap: 24,
+          alignItems: "flex-start",
+        }}
+        className="cl-booking-detail-grid stack-mobile">
+        {/* Left column */}
+        <div className="cl-stack-24">
+          <section className="cl-tile cl-tile-pad-lg">
+            <h2 className="cl-title-md" style={{ marginBottom: 18 }}>
+              Service details
+            </h2>
+            <dl className="cl-dlist">
+              <DetailRow dt="Type" dd={job.jobType ?? "Standard cleaning"} />
+              <DetailRow
+                dt="Address"
+                dd={
+                  job.location
+                    ? formatAddressLine({
+                        address: job.location,
+                        aptNumber: job.aptNumber,
+                      })
+                    : "—"
+                }
+              />
+              <DetailRow
+                dt="Property"
+                dd={`${
+                  // Stage 9 / PDF #11 — the customer's own answer, echoed back
+                  // to them. Absent on bookings taken before the field existed,
+                  // and on any booking where the admin hid the control.
+                  propertyTypeLabel(job.propertyType)
+                    ? `${propertyTypeLabel(job.propertyType)} · `
+                    : ""
+                }${job.bedCount ?? "?"} bed · ${job.bathCount ?? "?"} bath${
+                  job.halfBathCount ? ` + ${job.halfBathCount} half` : ""
+                }${
+                  job.squareFootage ? ` · ${job.squareFootage} sq ft` : ""
+                }`}
+              />
+              <DetailRow
+                dt="Cleaners"
+                dd={
+                  job.cleaners.length
+                    ? job.cleaners
+                        .map((c) => {
+                          const r = cleanerRating.get(c.id);
+                          return r ? `${c.name} (${r.toFixed(1)}★)` : c.name;
+                        })
+                        .join(", ")
+                    : "Being assigned…"
+                }
+              />
+              {/* Customers are non-financial viewers too (item 15): a legacy
+                  imported job's notes still carry "Final amount CAD: …" and the
+                  cleaner's payout. Same sanitizer the cleaner app uses. */}
+              {sanitizeCleanerNotes(job.notes) ? (
+                <DetailRow dt="Notes" dd={sanitizeCleanerNotes(job.notes)!} />
+              ) : null}
+            </dl>
+          </section>
+
+          <section className="cl-tile cl-tile-pad-lg">
+            <h2 className="cl-title-md" style={{ marginBottom: 6 }}>
+              Message your cleaner
+            </h2>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--primary-60)",
+                margin: "0 0 16px",
+                lineHeight: 1.5,
+              }}>
+              Chat with the cleaner assigned to this booking about access,
+              parking, pets or anything specific to this visit.
+            </p>
+            <JobChatThread
+              jobId={job.id}
+              otherLabel="Cleaner"
+              userName={client.name ?? session.user.name ?? undefined}
+              height={320}
+            />
+          </section>
+
+          {/* Which saved card this cleaning is charged on. Only while the
+              booking is still ahead of us and unsettled — after that the choice
+              would change nothing. The component's server action re-checks the
+              same conditions; this is the display half. */}
+          {isUpcoming &&
+          !isCompletedOrPaid &&
+          job.status !== "CANCELLED" &&
+          !job.paymentReceived ? (
+            <BookingPaymentMethod jobId={job.id} />
+          ) : null}
+
+          {job.addOns.length ? (
+            <section className="cl-tile cl-tile-pad-lg">
+              <h2 className="cl-title-md" style={{ marginBottom: 18 }}>
+                Add-ons
+              </h2>
+              <div className="cl-stack-8">
+                {job.addOns.map((a, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      padding: "12px 0",
+                      borderTop: i === 0 ? "none" : "1px solid var(--primary-10)",
+                      fontSize: 14,
+                    }}>
+                    <span style={{ color: "var(--ink)" }}>
+                      {a.name}
+                      {a.quantity > 1 ? ` ×${a.quantity}` : ""}
+                    </span>
+                    <span
+                      style={{
+                        color: addOnAmountIsIncluded(
+                          addOnLineTotal(a),
+                          addOnsIncludedInSubtotal
+                        )
+                          ? "var(--ink-soft)"
+                          : "var(--primary)",
+                        fontWeight: 600,
+                      }}>
+                      {/* An imported booking's extras were already inside the
+                          price the customer paid, so they carry no price of
+                          their own. "+$0.00" reads as a broken line item. */}
+                      {addOnAmountIsIncluded(addOnLineTotal(a), addOnsIncludedInSubtotal)
+                        ? ADDON_INCLUDED_LABEL
+                        : `+${formatPrice(addOnLineTotal(a))}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {job.logs.length ? (
+            <section className="cl-tile cl-tile-pad-lg">
+              <h2 className="cl-title-md" style={{ marginBottom: 18 }}>
+                Activity
+              </h2>
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}>
+                {job.logs.map((log) => (
+                  <li
+                    key={log.id}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      paddingBottom: 12,
+                      borderBottom: "1px solid var(--primary-10)",
+                      fontSize: 13,
+                    }}>
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "var(--primary-40)",
+                        marginTop: 6,
+                        flex: "0 0 auto",
+                      }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: "var(--ink)" }}>
+                        {ACTIVITY_LABELS[log.action] ?? "Update"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--primary-50)",
+                          marginTop: 2,
+                        }}>
+                        {fmtDateTime(log.createdAt)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+
+        {/* Right column */}
+        <div className="cl-stack-16">
+          <section className="cl-tile cl-tile-pad-lg">
+            <h2 className="cl-title-md" style={{ marginBottom: 18 }}>
+              Price
+            </h2>
+            <dl className="cl-dlist">
+              {job.subtotalAmount > 0 ? (
+                <DetailRow
+                  dt="Subtotal"
+                  dd={formatPrice(job.subtotalAmount)}
+                />
+              ) : null}
+              {/* Named from the rates this workspace charges, not from two
+                  strings typed into the page (Sept 17, item 7). Still hidden
+                  when the amount is zero, which is how a tax-exempt or cash
+                  job has always read here. */}
+              {taxLines(taxRates, job)
+                .filter((line) => line.amount > 0)
+                .map((line) => (
+                  <DetailRow
+                    key={line.key}
+                    dt={line.label}
+                    dd={formatPrice(line.amount)}
+                  />
+                ))}
+              <div className="cl-dlist-row with-border total">
+                <dt>Total</dt>
+                <dd>{formatPrice(job.price)}</dd>
+              </div>
+              {job.depositPaid ? (
+                <DetailRow
+                  dt="Deposit paid"
+                  // The deposit this booking actually charged (Stage 11 / PDF #9).
+                  // Was a literal 20, which told a post-construction customer they
+                  // had paid $20 of the $200 on their card statement.
+                  dd={`−${formatPrice(resolveDepositCredit(job))}`}
+                />
+              ) : null}
+              {job.refundedAmount > 0 ? (
+                <DetailRow
+                  dt="Refunded"
+                  dd={`−${formatPrice(job.refundedAmount)}`}
+                />
+              ) : null}
+            </dl>
+
+            {!job.paymentReceived && !isCompletedOrPaid ? (
+              <div
+                style={{
+                  marginTop: 18,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                  fontSize: 12,
+                  color: "var(--primary-60)",
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--primary-10)",
+                  lineHeight: 1.5,
+                }}>
+                <CreditCard
+                  size={14}
+                  style={{ marginTop: 2, flex: "0 0 auto" }}
+                />
+                <span>
+                  {job.depositPaid
+                    ? isAwaitingQuote(job.quoteStatus)
+                      ? `${formatDeposit(
+                          resolveDepositCredit(job)
+                        )} deposit collected with your request. It comes off your final quote, and nothing further is charged until you approve it.`
+                      : `${formatDeposit(
+                          resolveDepositCredit(job)
+                        )} deposit collected at booking. The remaining balance will be charged after your cleaning is complete.`
+                    : "You won't be charged until after your cleaning is complete."}
+                </span>
+              </div>
+            ) : null}
+
+            {isCompletedOrPaid ? (
+              <a
+                href={`/api/receipts/${job.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cl-btn cl-btn-secondary"
+                style={{ marginTop: 18, width: "100%" }}>
+                <Download size={14} /> Download receipt
+              </a>
+            ) : null}
+          </section>
+
+          {isUpcoming && !hasRequest ? (
+            <RequestActions
+              jobId={job.id}
+              startTime={job.startTime.toISOString()}
+              cancellationFeeUsd={cancellationFeeUsd}
+              cancellationWindowHours={cancellationWindowHours}
+              cancellationReasons={cancellationReasons}
+            />
+          ) : null}
+
+          <section className="cl-tile cl-tile-pad-sm">
+            <h3 className="cl-title-md" style={{ marginBottom: 8 }}>
+              Need help with this booking?
+            </h3>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--primary-70)",
+                margin: 0,
+                lineHeight: 1.55,
+              }}>
+              Email{" "}
+              <a className="cl-link" href={`mailto:${businessEmail}`}>
+                {businessEmail}
+              </a>{" "}
+              or text us at{" "}
+              <a className="cl-link" href={`tel:${businessPhone.replace(/[^\d+]/g, "")}`}>
+                {businessPhone}
+              </a>
+              .
+            </p>
+          </section>
+        </div>
+      </div>
+
+      <style>{`
+        @media (max-width: 900px) {
+          .cl-booking-detail-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </>
+  );
+}
+
+function DetailRow({
+  dt,
+  dd,
+}: {
+  dt: string;
+  dd: React.ReactNode;
+}) {
+  return (
+    <div className="cl-dlist-row">
+      <dt>{dt}</dt>
+      <dd>{dd}</dd>
+    </div>
+  );
+}

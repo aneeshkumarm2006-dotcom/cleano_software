@@ -1,0 +1,596 @@
+"use client";
+
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { stripeFor } from "@/lib/stripe-browser";
+import {
+  CreditCard,
+  Loader2,
+  ShieldCheck,
+  Tag,
+  CheckCircle2,
+  Banknote,
+  Image as ImageIcon,
+} from "lucide-react";
+import { applyPromoCode } from "../../actions/applyPromoCode";
+import { BookingDraft, SERVICE_TYPES } from "../types";
+import {
+  BOOKING_PAGE_DEFAULTS,
+  frequencyLabel,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
+import { formatAddressLine, propertyTypeLabel } from "@bookmops/core/property";
+import { calculateTax, taxLines, type TaxRates } from "@/lib/tax";
+import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
+import { normalizeJobType } from "@bookmops/core/services";
+import {
+  STANDARD_BOOKING_DEPOSIT_USD,
+  formatDeposit,
+  isQuotedService,
+} from "@/lib/booking-deposit";
+
+interface Props {
+  draft: BookingDraft;
+  basePrice: number;
+  onChange: (patch: Partial<BookingDraft>) => void;
+  /** Per-service-category recurring discount table (item 7). */
+  freqDiscounts?: Record<string, Record<string, number>>;
+  /** Admin-editable field layout (item 17) — source of frequency labels. */
+  bookingPage?: BookingPageConfig;
+  /**
+   * This workspace's sales tax rates (Sept 17, item 7). Required, with no
+   * default: a default is what let this screen quote Quebec's rates on an
+   * Alberta booking.
+   */
+  taxRates: TaxRates;
+  /**
+   * This workspace's Stripe publishable key. Required, with no default, for
+   * the same reason as `taxRates`: the old default was a platform-wide value
+   * that quietly belonged to a different company.
+   */
+  stripePublishableKey: string | null;
+}
+
+export default function Step5Review({
+  draft,
+  basePrice,
+  onChange,
+  freqDiscounts = {},
+  bookingPage = BOOKING_PAGE_DEFAULTS,
+  taxRates,
+  stripePublishableKey,
+}: Props) {
+  const stripePromise = useMemo(
+    () => stripeFor(stripePublishableKey),
+    [stripePublishableKey],
+  );
+  const breakdown = useMemo(() => {
+    const addOnTotal = sumAddOns(draft.addOns.filter((a) => a.selected));
+    // GROSS pre-tax subtotal. This is the figure a promo code is quoted
+    // against, and the same one `submitBooking` re-resolves the code against
+    // server-side, so the discount shown here is the discount that is applied.
+    const subtotal = basePrice + addOnTotal + draft.travelFee;
+    const promoDiscount =
+      draft.promoApplied && draft.promoDiscount
+        ? Math.min(draft.promoDiscount, subtotal)
+        : 0;
+    // The promo comes off BEFORE tax, exactly as the server does it
+    // (`computeBookingPrice` folds every discount into the pre-tax amount), so
+    // GST/QST are charged on what the customer actually pays. Subtracting it
+    // from the taxed total instead quotes a total the booking never gets
+    // charged — the same class of bug as not applying it at all.
+    const tax = calculateTax(subtotal - promoDiscount, taxRates);
+    return {
+      addOnTotal,
+      subtotal: Math.round(subtotal * 100) / 100,
+      promoDiscount,
+      gstAmount: tax.gstAmount,
+      qstAmount: tax.qstAmount,
+      total: tax.total,
+      // Only the rows this workspace actually charges (Sept 17, item 7).
+      lines: taxLines(taxRates, tax),
+    };
+  }, [draft, basePrice, taxRates]);
+
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // True when this company charges no deposit at all, which makes the whole
+  // card step disappear rather than showing an empty payment form.
+  const [depositWaived, setDepositWaived] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState<string | null>(null);
+  // What the deposit actually is, as reported by the route that created the
+  // intent (PDF #9, Stage 11). NOT computed here: the amount is resolved
+  // server-side from the service type, and a locally-derived figure could quote
+  // the customer one number while their card was charged another. Starts on the
+  // standard $20 so the first paint of a non-PC booking is unchanged.
+  const [depositUsd, setDepositUsd] = useState(STANDARD_BOOKING_DEPOSIT_USD);
+
+  const isQuote = isQuotedService(draft.serviceType);
+
+  // Promo code
+  const [promoMsg, setPromoMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [, startPromoTransition] = useTransition();
+
+  function handleApplyPromo() {
+    if (!draft.promoCode?.trim()) return;
+    startPromoTransition(async () => {
+      const res = await applyPromoCode(draft.promoCode!, breakdown.subtotal);
+      if (res.valid) {
+        onChange({ promoDiscount: res.discountAmount, promoApplied: true });
+        setPromoMsg({ ok: true, text: `Code applied — ${res.discountAmount! < 1 ? "" : "-"}$${res.discountAmount!.toFixed(2)} off` });
+      } else {
+        onChange({ promoDiscount: 0, promoApplied: false });
+        setPromoMsg({ ok: false, text: res.message ?? "Invalid code" });
+      }
+    });
+  }
+
+  // Validate a code entered back in step 4 as soon as the customer lands here,
+  // instead of waiting for them to press "Apply code". The server honours any
+  // valid code at submit, so a code that is silently ignored by this screen
+  // would quote a total higher than the one actually charged. Invalid codes
+  // stay quiet — the explicit button is what surfaces the reason.
+  const promoCodeTrimmed = draft.promoCode?.trim() ?? "";
+  const promoSubtotal = breakdown.subtotal;
+  const promoAlreadyApplied = draft.promoApplied === true;
+  useEffect(() => {
+    if (!promoCodeTrimmed || promoAlreadyApplied) return;
+    let cancelled = false;
+    applyPromoCode(promoCodeTrimmed, promoSubtotal)
+      .then((res) => {
+        if (cancelled || !res.valid || !res.discountAmount) return;
+        onChange({ promoDiscount: res.discountAmount, promoApplied: true });
+        setPromoMsg({
+          ok: true,
+          text: `Code applied — -$${res.discountAmount.toFixed(2)} off`,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promoCodeTrimmed, promoSubtotal, promoAlreadyApplied]);
+
+  // Create the deposit PaymentIntent when contact info is known.
+  //
+  // `serviceType` goes with it so the route can resolve the right amount — $20
+  // for a regular booking, the configured post-construction deposit otherwise
+  // (PDF #9). It is a SELECTOR, not a price: the route picks between two
+  // server-side figures and `submitBooking` re-resolves the same one, so a
+  // tampered value can only produce an intent that fails verification.
+  //
+  // Re-runs on serviceType too. Without that, a customer who reached step 5,
+  // went back and switched to post-construction would pay against a stale $20
+  // intent and have their booking rejected at submit.
+  useEffect(() => {
+    if (!draft.email || !draft.name) {
+      // Sept 17, item 9. This used to return in silence: no spinner, no error,
+      // no card form, and a Confirm button greyed out for a reason that
+      // appeared nowhere on the page. It is only reachable from a restored
+      // session, which is exactly the case nobody tests by hand.
+      setStripeLoading(false);
+      setStripeError(
+        "We need your name and email before we can take the deposit. Go back to the contact step and add them.",
+      );
+      return;
+    }
+    setStripeLoading(true);
+    setStripeError(null);
+    fetch("/api/stripe/charge-deposit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: draft.email,
+        name: draft.name,
+        serviceType: draft.serviceType,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        // This company charges no deposit. There is no card to collect and
+        // nothing to confirm with Stripe — the booking is simply made.
+        if (data.depositWaived) {
+          setDepositWaived(true);
+          setClientSecret(null);
+          setDepositUsd(0);
+          onChange({ depositWaived: true, stripeCardReady: false });
+          return;
+        }
+        setDepositWaived(false);
+        onChange({ depositWaived: false });
+
+        if (data.clientSecret) {
+          setClientSecret(data.clientSecret);
+          if (typeof data.amountUsd === "number" && data.amountUsd >= 0) {
+            setDepositUsd(data.amountUsd);
+          }
+          onChange({ stripeCustomerId: data.customerId });
+        } else {
+          // The company has not connected a payment account yet. Say that,
+          // rather than "please refresh" — refreshing has never once fixed it,
+          // and the person who can fix it is not the one reading the message.
+          setStripeError(
+            data.code === "STRIPE_NOT_CONFIGURED"
+              ? "This company can't take card payments online yet. Please contact them directly to book."
+              : "Could not start the payment. Please try again in a moment.",
+          );
+        }
+      })
+      .catch(() => setStripeError("Could not start the payment. Please try again in a moment."))
+      .finally(() => setStripeLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.email, draft.name, draft.serviceType]);
+
+  const service = SERVICE_TYPES.find((s) => s.value === draft.serviceType);
+  // Per-service label from the admin config. The old lookup searched only the
+  // standard list, so every Airbnb-only frequency (twice-weekly, daily/20+)
+  // reviewed as "—" even though it priced correctly.
+  const freqText = frequencyLabel(bookingPage, draft.serviceType, draft.frequency);
+
+  // Recurring discount for the 2nd+ cleaning, from the admin config (item 7).
+  const isAirbnb = draft.serviceType === "AIRBNB";
+  const discountCategory = normalizeJobType(draft.serviceType) ?? "RESIDENTIAL";
+  const recurringPct =
+    draft.frequency === "ONE_TIME"
+      ? 0
+      : freqDiscounts[discountCategory]?.[draft.frequency] ??
+        freqDiscounts.RESIDENTIAL?.[draft.frequency] ??
+        0;
+
+  const propertyLine = [
+    // Stage 9 / PDF #11 — echoed back before they pay, so a mis-tap on step 2
+    // is visible while it is still correctable. Drops out when unanswered.
+    propertyTypeLabel(draft.propertyType),
+    `${draft.bedCount} bed`,
+    `${draft.bathCount} bath${draft.halfBathCount ? ` + ${draft.halfBathCount} half` : ""}`,
+    draft.squareFootage > 0 ? `${draft.squareFootage} sq ft` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const dateLine = draft.date
+    ? `${new Date(draft.date).toLocaleDateString("en-US", { weekday: "long" })} · ${
+        draft.isFlexible ? "Flexible time" : formatSlot(draft.timeSlot)
+      }`
+    : "—";
+
+  return (
+    <div className="cl-stack-32">
+      <header className="cl-stack-8">
+        <p className="cl-eyebrow">Step 5 · Final</p>
+        <h1 className="cl-display" style={{ fontSize: "clamp(34px, 4.4vw, 52px)" }}>
+          Review your
+          <br />
+          <em>booking.</em>
+        </h1>
+        <p className="cl-subtitle">
+          {isQuote ? (
+            <>
+              A <strong>{formatDeposit(depositUsd)} deposit</strong> is charged
+              today to book your post-construction assessment. We review your
+              photos and email your <strong>final quote</strong> — the balance is
+              only charged once you&apos;ve approved it and the work is done.
+            </>
+          ) : (
+            <>
+              A <strong>{formatDeposit(depositUsd)} deposit</strong> is charged
+              today to secure your booking. The remaining balance is charged after
+              your cleaning is complete.
+            </>
+          )}
+        </p>
+      </header>
+
+      {/* PDF #9 — the price above the fold has to say out loud that it is not
+          the price. A customer who reads "$600" and later receives a $760 quote
+          was misled by this screen, not by the admin who priced the job. */}
+      {isQuote && (
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+            padding: "14px 16px",
+            borderRadius: 12,
+            background: "var(--primary-10)",
+            border: "1px solid var(--primary-15)",
+          }}>
+          <ImageIcon size={16} style={{ color: "var(--primary)", marginTop: 2, flex: "0 0 auto" }} />
+          <span style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)" }}>
+            <strong>This is an estimate, not your final price.</strong> Post-
+            construction jobs are quoted from your photos
+            {draft.photos.length > 0
+              ? ` (${draft.photos.length} attached)`
+              : ""}
+            . We&apos;ll email the final quote — usually within one business day —
+            and your deposit comes off it.
+          </span>
+        </div>
+      )}
+
+      <div className="cl-card-soft">
+        <span className="cl-label" style={{ display: "block", marginBottom: 14 }}>
+          Service
+        </span>
+        <dl className="cl-dlist">
+          <Row dt="Type" dd={service?.label ?? "—"} />
+          <Row dt="Frequency" dd={freqText} />
+          <Row
+            dt="Address"
+            dd={
+              formatAddressLine({
+                address: draft.address,
+                aptNumber: draft.aptNumber,
+              }) || "—"
+            }
+          />
+          <Row dt="Property" dd={propertyLine} />
+          <Row dt="Date" dd={dateLine} />
+        </dl>
+      </div>
+
+      <div className="cl-card-soft">
+        <span className="cl-label" style={{ display: "block", marginBottom: 14 }}>
+          Price breakdown
+        </span>
+        <dl className="cl-dlist">
+          <Row dt="Base service" dd={`$${basePrice.toFixed(2)}`} />
+          {/* Keyed on the catalog id, not the name: two catalog rows can share
+              a name (the settings editor seeds a blank one and never dedupes),
+              and a duplicate React key silently drops a row from the review. */}
+          {draft.addOns
+            .filter((a) => a.selected)
+            .map((a, i) => (
+              <Row
+                key={a.id ?? `${a.name}-${i}`}
+                dt={
+                  a.quantity > 1
+                    ? `${a.name} ×${a.quantity} · $${a.price.toFixed(2)} each`
+                    : a.name
+                }
+                dd={`+$${addOnLineTotal(a).toFixed(2)}`}
+              />
+            ))}
+          {draft.travelFee > 0 ? (
+            <Row dt="Travel fee" dd={`+$${draft.travelFee.toFixed(2)}`} />
+          ) : null}
+          <RowBorder dt="Subtotal" dd={`$${breakdown.subtotal.toFixed(2)}`} />
+          {breakdown.promoDiscount > 0 ? (
+            <Row dt={`Promo (${draft.promoCode})`} dd={`-$${breakdown.promoDiscount.toFixed(2)}`} />
+          ) : null}
+          {/* Was two fixed rows naming Quebec's rates, printed whatever this
+              workspace charges. Calgary sets its provincial rate to 0 and
+              still got the row, with a real amount in it. */}
+          {breakdown.lines.map((line) => (
+            <Row key={line.key} dt={line.label} dd={`$${line.amount.toFixed(2)}`} />
+          ))}
+          <RowBorder
+            total
+            dt={
+              isQuote
+                ? "Estimated total — final quote after photo review"
+                : "Total (1st cleaning)"
+            }
+            dd={`$${breakdown.total.toFixed(2)}`}
+          />
+          {recurringPct > 0 && (
+            <div className="cl-dlist-row" style={{ marginTop: 6 }}>
+              <dt style={{ color: "var(--primary)", fontSize: 12 }}>
+                {recurringPct}% off {isAirbnb ? "every visit" : "from 2nd cleaning"}
+              </dt>
+              <dd style={{ color: "var(--primary)", fontSize: 12, fontWeight: 600 }}>
+                −${(basePrice * (recurringPct / 100)).toFixed(2)}/visit
+              </dd>
+            </div>
+          )}
+          <div className="cl-dlist-row" style={{ marginTop: 8, paddingTop: 8, borderTop: "1px dashed var(--primary-15)" }}>
+            <dt style={{ color: "var(--primary)", fontWeight: 600 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Banknote size={15} />
+                Due today (deposit)
+              </span>
+            </dt>
+            <dd style={{ color: "var(--primary)", fontWeight: 700 }}>
+              {formatDeposit(depositUsd)}
+            </dd>
+          </div>
+          <div className="cl-dlist-row">
+            <dt style={{ color: "var(--primary-50)", fontSize: 12 }}>Remaining balance</dt>
+            <dd style={{ color: "var(--primary-50)", fontSize: 12 }}>
+              {isQuote ? "After you approve the quote" : "After cleaning"}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      {/* Promo code apply */}
+      {draft.promoCode && !draft.promoApplied && (
+        <div className="cl-card-soft cl-stack-8">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Tag size={16} style={{ color: "var(--primary)" }} />
+            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>
+              Promo code: <code style={{ fontFamily: "monospace" }}>{draft.promoCode}</code>
+            </span>
+          </div>
+          {promoMsg && !promoMsg.ok && (
+            <p style={{ fontSize: 13, color: "var(--red, var(--error))" }}>{promoMsg.text}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleApplyPromo}
+            style={{ alignSelf: "flex-start", padding: "8px 20px", borderRadius: 8, background: "var(--primary)", color: "#fff", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer" }}>
+            Apply code
+          </button>
+        </div>
+      )}
+      {draft.promoApplied && promoMsg?.ok && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--primary)" }}>
+          <CheckCircle2 size={16} /> {promoMsg.text}
+        </div>
+      )}
+
+      {/* No deposit: this company takes bookings without a card. The whole
+          payment block disappears rather than rendering an empty card form
+          with a "$0.00 deposit" heading above it. */}
+      {depositWaived ? (
+        <div className="cl-card-soft cl-stack-12">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <ShieldCheck size={20} style={{ color: "var(--primary)" }} />
+            <span style={{ fontWeight: 600, fontSize: 15, color: "var(--ink)" }}>
+              No deposit needed
+            </span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--primary-70)", margin: 0, lineHeight: 1.55 }}>
+            Confirm below and your booking is placed. Payment is arranged after your
+            cleaning.
+          </p>
+        </div>
+      ) : (
+      /* Stripe deposit charge */
+      <div className="cl-card-soft cl-stack-12">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <CreditCard size={20} style={{ color: "var(--primary)" }} />
+          <span style={{ fontWeight: 600, fontSize: 15, color: "var(--ink)" }}>
+            Pay {formatDeposit(depositUsd)} deposit &amp; save card
+          </span>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--primary-70)", margin: "0 0 16px", lineHeight: 1.55 }}>
+          {/* The deposit is charged BEFORE the request is submitted, per PDF #9 —
+              the button below confirms the payment first and only then creates
+              the booking. */}
+          {isQuote
+            ? `A ${formatDeposit(
+                depositUsd
+              )} deposit is charged now to book your assessment, and it comes off your final quote. Your card is saved for the balance. Apple Pay and Google Pay accepted.`
+            : `A ${formatDeposit(
+                depositUsd
+              )} deposit is charged now to secure your booking. Your card is saved for the remaining balance after cleaning. Apple Pay and Google Pay accepted.`}
+        </p>
+
+        {stripeLoading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--primary-60)", fontSize: 14 }}>
+            <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+            Loading payment form…
+          </div>
+        )}
+
+        {stripeError && (
+          <p style={{ color: "var(--red, var(--error))", fontSize: 13 }}>{stripeError}</p>
+        )}
+
+        {clientSecret && !stripeLoading && stripePromise && (
+          <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+            <CardForm onChange={onChange} />
+          </Elements>
+        )}
+
+        {/* A deposit was started but this workspace has no publishable key, so
+            there is nothing to mount the card field with. Previously this
+            rendered an empty <Elements> and the customer saw blank space above
+            a dead Confirm button. Say it plainly instead, and name the person
+            who can actually fix it, which is not the customer. */}
+        {clientSecret && !stripeLoading && !stripePromise && (
+          <p style={{ color: "var(--red, var(--error))", fontSize: 13, margin: 0 }}>
+            This company can&apos;t take card payments online yet. Please
+            contact them directly and they&apos;ll book it for you.
+          </p>
+        )}
+
+        {/* Nothing loading, nothing wrong, and still no card form. That
+            combination should be impossible, and when it happened the customer
+            saw an empty box above a dead button. Saying so is better than
+            leaving them to guess, and it names the state so a support message
+            about it is actionable (Sept 17, item 9). */}
+        {!clientSecret && !stripeLoading && !stripeError && (
+          <p style={{ color: "var(--primary-70)", fontSize: 13, margin: 0 }}>
+            The payment form didn&apos;t load. Reload the page, and if it still
+            doesn&apos;t appear, contact us and we&apos;ll book it for you.
+          </p>
+        )}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, color: "var(--primary-50)", fontSize: 12 }}>
+          <ShieldCheck size={13} />
+          Secured by Stripe · 256-bit encryption
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}
+
+function CardForm({ onChange }: { onChange: (p: Partial<BookingDraft>) => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  // Returns { paymentIntentId, paymentMethodId } on success, or null on failure
+  async function confirm(): Promise<{ paymentIntentId: string; paymentMethodId: string } | null> {
+    if (!stripe || !elements) return null;
+    const result = await stripe.confirmPayment({
+      elements,
+      redirect: "if_required",
+    });
+    if (result.error) {
+      // If the PI was already confirmed on a previous attempt (e.g. booking
+      // creation failed after the charge succeeded), Stripe returns the
+      // existing succeeded PI in the error — reuse it instead of failing.
+      const pi = result.error.payment_intent;
+      if (pi?.status === "succeeded") {
+        return {
+          paymentIntentId: pi.id,
+          paymentMethodId: pi.payment_method as string,
+        };
+      }
+      return null;
+    }
+    const pi = result.paymentIntent;
+    return {
+      paymentIntentId: pi.id,
+      paymentMethodId: pi.payment_method as string,
+    };
+  }
+
+  // Expose confirm handle so the parent page can call it before submitting the booking
+  useEffect(() => {
+    (window as any).__stripeConfirmCard = confirm;
+    return () => { delete (window as any).__stripeConfirmCard; };
+  });
+
+  return (
+    <PaymentElement
+      options={{ layout: "tabs" }}
+      onChange={(e) => {
+        if (e.complete) {
+          onChange({ stripeCardReady: true });
+        } else {
+          onChange({ stripeCardReady: false });
+        }
+      }}
+    />
+  );
+}
+
+function Row({ dt, dd }: { dt: string; dd: React.ReactNode }) {
+  return (
+    <div className="cl-dlist-row">
+      <dt>{dt}</dt>
+      <dd>{dd}</dd>
+    </div>
+  );
+}
+
+function RowBorder({ dt, dd, total }: { dt: string; dd: React.ReactNode; total?: boolean }) {
+  return (
+    <div className={`cl-dlist-row with-border ${total ? "total" : ""}`}>
+      <dt>{dt}</dt>
+      <dd>{dd}</dd>
+    </div>
+  );
+}
+
+function formatSlot(slot: string): string {
+  if (!slot) return "—";
+  const [h] = slot.split(":");
+  const hour = parseInt(h);
+  return `${hour > 12 ? hour - 12 : hour} ${hour >= 12 ? "PM" : "AM"}`;
+}

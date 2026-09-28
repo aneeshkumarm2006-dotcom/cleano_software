@@ -1,0 +1,4 @@
+{
+  "extends": "@bookmops/typescript-config/library.json",
+  "include": ["src"]
+}

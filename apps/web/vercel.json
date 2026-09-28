@@ -1,0 +1,32 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/notifications",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/subscriptions",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/cron/monthly",
+      "schedule": "0 13 1 * *"
+    },
+    {
+      "path": "/api/cron/api-retention",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/job-reminders",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

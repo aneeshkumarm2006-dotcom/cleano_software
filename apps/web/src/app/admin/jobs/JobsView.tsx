@@ -1,0 +1,1607 @@
+"use client";
+
+import React, { Fragment, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Search, Filter, Briefcase, CheckCircle2, DollarSign,
+  AlertTriangle, Loader, Plus, CalendarClock, Wallet,
+  Trash2, XCircle, UserPlus, Tag, RotateCcw, PlayCircle,
+} from "lucide-react";
+import Button from "@/components/ui/Button";
+import PremiumSelect from "@/components/ui/PremiumSelect";
+import DatePicker from "@/components/ui/DatePicker";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { permanentlyDeleteJobs } from "../actions/permanentlyDeleteJobs";
+import { bulkCancelJobs } from "../actions/bulkCancelJobs";
+import {
+  DEFAULT_SERVICE_CATALOG,
+  serviceOptions as catalogServiceOptions,
+  normalizeJobType,
+  jobTypeLabel,
+} from "@bookmops/core/services";
+import JobChatUnreadPill from "@/components/JobChatUnread";
+import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
+import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
+import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
+import { generateInvoiceFromJob } from "../actions/generateInvoiceFromJob";
+import { fmtDate, fmtTime } from "@/lib/time";
+import { avatarColor, initials } from "@/lib/avatar";
+import {
+  isRevenueJob,
+  jobRevenue,
+  isScheduledValueJob,
+  jobScheduledValue,
+  isCompletedJob,
+  isFutureJob,
+  isOnHoldJob,
+  isUpcomingJob,
+  simpleJobStatus,
+} from "@/lib/metrics-shared";
+import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@bookmops/core/jobs";
+import { releaseJobHold } from "../actions/releaseJobHold";
+// Client-safe by design (see the header of job-money.ts) — the table can price
+// a row with exactly the function the job page and the invoice use.
+import { activeSubtotal } from "@/lib/job-money";
+import { compareOperational, startOfYesterday } from "@/lib/job-order";
+
+interface Job {
+  id: string;
+  clientName: string;
+  clientId: string | null;
+  location: string | null;
+  description: string | null;
+  jobType: string | null;
+  jobDate: string | null;
+  startTime: string;
+  endTime: string | null;
+  /** Round 4, fix 1 — required by the completion predicate, which treats a
+   *  clock-out as proof the work happened even when the scheduled start is
+   *  still ahead (an early finish on a job booked for later today). Without it
+   *  the tab and the SQL bucket would answer differently for that one row. */
+  clockOutTime: string | null;
+  status: string;
+  /** Round 4, fix 6 — why this job is on hold. Non-null only on a held row;
+   *  rendered in the pill's tooltip and in the row's release confirmation, so
+   *  an admin never has to open a job to find out what is blocking it. */
+  holdReason?: string | null;
+  price: number | null;
+  employeePay: number | null;
+  /** D2 — is that figure an order or a save-time estimate? Feeds JobModal. */
+  employeePayIsManual?: boolean | null;
+  totalTip: number | null;
+  parking: number | null;
+  notes: string | null;
+  paymentReceived: boolean;
+  invoiceSent: boolean;
+  paymentType?: string | null;
+  isCashJob?: boolean;
+  usesFixedPrice?: boolean;
+  // Required, not optional — see the ActiveValueJob note below: this row is fed
+  // to `activeSubtotal`, and an absent discount would price the job wrong.
+  discountAmount: number | null;
+  refundedAmount?: number | null;
+  deletedAt?: string | null;
+  bedCount?: number | null;
+  requiredCleaners?: number | null;
+  bathCount?: number | null;
+  profit?: number;
+  profitPct?: number;
+  /** False when the crew's pay has not been recorded yet. */
+  profitKnown?: boolean;
+  timeSpentMs?: number;
+  cleaners: Array<{ id: string; name: string }>;
+  // Fix 3 — the columns the ACTIVE value of the job is computed from. Required,
+  // not optional: the stat cards below feed these rows to `jobRevenue` /
+  // `jobScheduledValue`, and a row missing one of them would quietly revert to
+  // the bare base price this stage exists to stop printing.
+  addOns: Array<{ id: string; name: string; price: number; quantity: number }>;
+  subtotalAmount: number | null;
+  bookingSource: string | null;
+  pricingMode: string | null;
+}
+
+interface ClientLite { id: string; name: string; }
+interface UserLite   { id: string; name: string; email: string; }
+
+interface JobsViewProps {
+  /** Service list from Settings → Job Types (item 20). */
+  serviceOptions?: { value: string; label: string }[];
+  jobs: Job[];
+  /**
+   * The tab to open on, from `?subTab=` (round 4, fix 6). Anything unrecognised
+   * falls back to All, so an old or hand-typed link degrades to the full list
+   * rather than to an empty page.
+   */
+  initialSubTab?: string;
+  isLoading: boolean;
+  searchTerm: string;
+  statusFilter: string;
+  paymentFilter: string;
+  rowsPerPage: number;
+  page: number;
+  onSearchTermChange: (term: string) => void;
+  onStatusFilterChange: (filter: string) => void;
+  onPaymentFilterChange: (filter: string) => void;
+  onRowsPerPageChange: (rowsPerPage: number) => void;
+  onPageChange: (page: number) => void;
+  updateURLParams: (updates: Record<string, string | number>) => void;
+  onCreateJob: () => void;
+  onEditJob: (job: Job) => void;
+  clients?: ClientLite[];
+  users?: UserLite[];
+  cleaners?: UserLite[];
+  /**
+   * Is this viewer seeing the WHOLE company's jobs, or only the ones they are
+   * assigned to? The page narrows the query to `employeeId = me` for anyone who
+   * is not OWNER/ADMIN (decision D13), and only the empty state reads this —
+   * so that "there are none" and "you are not assigned to any" stop looking
+   * like the same broken query. Defaults true: a caller that doesn't say is
+   * assumed unscoped, which is the claim-nothing option.
+   */
+  isAdmin?: boolean;
+  archived?: boolean;
+  startDate?: string;
+  endDate?: string;
+  jobTypeFilter?: string;
+  clientFilter?: string;
+  employeeFilter?: string;
+  paymentTypeFilter?: string;
+  onStartDateChange?: (v: string) => void;
+  onEndDateChange?: (v: string) => void;
+  onJobTypeFilterChange?: (v: string) => void;
+  onClientFilterChange?: (v: string) => void;
+  onEmployeeFilterChange?: (v: string) => void;
+  onPaymentTypeFilterChange?: (v: string) => void;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function AvatarStack({ cleaners, max = 3 }: { cleaners: Array<{ id: string; name: string }>; max?: number }) {
+  if (!cleaners.length) return <span style={{ color: 'var(--primary-40)', fontSize: 13 }}>—</span>;
+  const shown = cleaners.slice(0, max);
+  const extra = cleaners.length - max;
+  return (
+    <div className="avstack" title={cleaners.map(c => c.name).join(', ')}>
+      {shown.map(c => (
+        <div key={c.id} className="avatar" style={{ background: avatarColor(c.name) }}>
+          {initials(c.name)}
+        </div>
+      ))}
+      {extra > 0 && (
+        <div className="avatar" style={{ background: 'var(--primary-40)' }}>+{extra}</div>
+      )}
+    </div>
+  );
+}
+
+// Renders the DERIVED operational status (simpleJobStatus), not the raw enum —
+// spec's three main statuses: Scheduled (future), Completed (date passed,
+// unpaid), Paid (payment received). "Paid" is distinct green-on-emerald so it
+// reads differently from Completed at a glance.
+function StatusPill({ status, title }: { status: string; title?: string }) {
+  const map: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+    // Round 4, fix 6. `simpleJobStatus` returns ON_HOLD for a CREATED job, so
+    // this entry is what stops a held row falling through to the grey
+    // unknown-status fallback and printing the raw enum. Amber: a hold is
+    // waiting on somebody here, unlike Scheduled which is waiting on the date.
+    // The REASON rides on `title` — the PDF's "visible on hover" — and the pill
+    // itself stays two words, because a pill is a chip, not a sentence.
+    ON_HOLD:     { label: HOLD_LABEL,    bg: 'var(--warning-soft)', color: 'var(--amber-800)', dot: 'var(--amber-600)' },
+    SCHEDULED:   { label: 'Scheduled',   bg: 'var(--info-soft)', color: 'var(--info)', dot: 'var(--info)' },
+    // The accent, not amber. ON_HOLD above was already amber, so an amber
+    // IN_PROGRESS gave two different states the SAME pill — same background,
+    // same text colour, differing only in a 6px dot of a neighbouring amber.
+    // In a table you scan, that is one state wearing two names. The accent is
+    // also the honest colour here: this is the job happening right now.
+    IN_PROGRESS: { label: 'In Progress', bg: 'var(--primary-10)', color: 'var(--primary-70)', dot: 'var(--primary)' },
+    COMPLETED:   { label: 'Completed',   bg: 'var(--emerald-100)', color: 'var(--emerald-800)', dot: 'var(--emerald-600)' },
+    // emerald-700, not 600: white on the lighter green is 3.77:1 at 11px,
+    // below AA. Paid stays the one solid pill on the row because it is the
+    // terminal money state — the weight is the point, not an inconsistency.
+    PAID:        { label: 'Paid',        bg: 'var(--emerald-700)', color: '#ffffff', dot: 'var(--emerald-200)' },
+    // Neutral, not red. A cancelled job is an ended state, not a fault, and it
+    // needs nobody. Painting it red made it shout louder than Overdue, which
+    // genuinely does need somebody. Red now means "a person must act".
+    CANCELLED:   { label: 'Cancelled',   bg: 'var(--neutral-soft)', color: 'var(--ink-2)', dot: 'var(--ink-3)' },
+  };
+  const c = map[status] || { label: status, bg: 'var(--neutral-soft)', color: 'var(--ink-2)', dot: 'var(--ink-3)' };
+  return (
+    <span className="pill" style={{ background: c.bg, color: c.color }} title={title}>
+      <span className="pill-dot" style={{ background: c.dot }} />
+      {c.label}
+    </span>
+  );
+}
+
+/** The pill for a job row, carrying its hold reason when it has one. */
+function JobStatusPill({ job }: { job: Job }) {
+  const status = simpleJobStatus(job);
+  return (
+    <StatusPill
+      status={status}
+      title={status === 'ON_HOLD' ? holdLabel(job.holdReason) : undefined}
+    />
+  );
+}
+
+// Colors keyed off the NORMALIZED category so "MOVE_IN_OUT" (imported) and
+// "Move-in / Move-out" (manual) render the same pill; jobTypeLabel() keeps raw
+// enum text out of the UI.
+const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
+  // --primary-800, not --primary: teal on --primary-10 is 3.56:1, below AA.
+  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary-800)' },
+  DEEP:              { bg: '#ede9fe',           color: '#5b21b6' },
+  MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
+  MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
+  MOVE_IN_OUT:       { bg: '#dcfce7',           color: '#166534' },
+  COMMERCIAL:        { bg: 'var(--blue-100)',           color: 'var(--blue-800)' },
+  POST_CONSTRUCTION: { bg: 'var(--warning-soft)',           color: 'var(--amber-800)' },
+  AIRBNB:            { bg: '#ffe4e6',           color: '#9f1239' },
+  FOLLOW_UP:         { bg: '#f3f4f6',           color: '#374151' },
+};
+
+function TypePill({ type }: { type: string | null }) {
+  if (!type) return null;
+  const category = normalizeJobType(type);
+  const c = (category && TYPE_PILL_COLORS[category]) || { bg: '#f3f4f6', color: '#374151' };
+  return <span className="pill" style={{ background: c.bg, color: c.color }}>{jobTypeLabel(type)}</span>;
+}
+
+function CashPill() {
+  return (
+    <span className="pill" style={{ background: '#fef9c3', color: '#854d0e' }} title="Cash job — no Stripe charge, tax exempt">
+      Cash
+    </span>
+  );
+}
+
+function FixedPricePill() {
+  return (
+    <span className="pill" style={{ background: '#ede9fe', color: '#5b21b6' }} title="Client-specific fixed price applied to this booking">
+      Fixed
+    </span>
+  );
+}
+
+// Spec item 9: the $ icon marks payment received (job → Paid) and the mail
+// icon marks the invoice sent (generating the invoice record on first use),
+// straight from the table row. Optimistic — the row updates immediately and
+// reverts if the server action fails.
+function PayIcons({
+  paymentReceived,
+  invoiceSent,
+  busy,
+  onTogglePaid,
+  onToggleInvoice,
+}: {
+  paymentReceived: boolean;
+  invoiceSent: boolean;
+  busy?: boolean;
+  onTogglePaid: () => void;
+  onToggleInvoice: () => void;
+}) {
+  return (
+    <div className="pay-icons">
+      <button
+        type="button"
+        className={`pay-icon pay-icon-btn ${paymentReceived ? 'paid' : 'unpaid'}`}
+        title={paymentReceived ? 'Paid — click to mark as not received' : 'Mark payment received'}
+        disabled={busy}
+        onClick={(e) => { e.stopPropagation(); onTogglePaid(); }}
+      >$</button>
+      <button
+        type="button"
+        className={`pay-icon pay-icon-btn ${invoiceSent ? 'sent' : 'unsent'}`}
+        title={invoiceSent ? 'Invoice sent — click to un-mark' : 'Mark invoice sent (creates the invoice)'}
+        disabled={busy}
+        onClick={(e) => { e.stopPropagation(); onToggleInvoice(); }}
+      >✉</button>
+    </div>
+  );
+}
+
+function AStatCard({ icon: Icon, label, value, hint }: { icon: any; label: string; value: string | number; hint?: string }) {
+  return (
+    <div className="astat">
+      <div className="astat-head">
+        <span>{label}</span>
+        <div className="astat-icon"><Icon size={15} /></div>
+      </div>
+      <div className="astat-value">{value}</div>
+      {hint && <div className="astat-delta">{hint}</div>}
+    </div>
+  );
+}
+
+// Always render off `startTime` (a real instant) in the BUSINESS timezone —
+// browser-local formatting showed a 1 PM Toronto job as 6:30 PM to anyone
+// browsing from another timezone, and the legacy midnight-UTC `jobDate` field
+// can disagree with startTime by a day.
+function formatDate(_dateStr: string | null, fallback: string): string {
+  return fmtDate(fallback, { month: 'short', day: 'numeric' });
+}
+
+function formatTime(iso: string): string {
+  return fmtTime(iso);
+}
+
+function formatTimeSpent(ms: number | undefined): string {
+  if (!ms || ms <= 0) return '—';
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function payTypeLabel(type: string | null | undefined): string {
+  const map: Record<string, string> = {
+    CASH: 'Cash', CHEQUE: 'Cheque', E_TRANSFER: 'E-Transfer',
+    CREDIT_CARD: 'Card', OTHER: 'Other',
+  };
+  return type ? (map[type] || type.replace(/_/g, ' ')) : '—';
+}
+
+function profitClass(pct: number | undefined): string {
+  if (pct === undefined) return '';
+  if (pct >= 50) return 'good';
+  if (pct >= 25) return 'warn';
+  return 'bad';
+}
+
+const TABS = [
+  // NOT "All". This tab deliberately excludes cancelled work (see
+  // jobMatchesTab), which is the right behaviour and the wrong word: a row of
+  // identical pills reading "All 40" beside "Cancelled 31" cannot be read as
+  // anything but a contradiction, and the number an admin then distrusts is
+  // the one on every stat card above it.
+  { id: 'all',        label: 'Active' },
+  { id: 'upcoming',   label: 'Upcoming' },
+  // Round 4, fix 6. On-hold work left Upcoming (it is not scheduled work — PDF
+  // p5) and this is where it went, sitting beside Upcoming rather than at the
+  // end with Discounted/Free because it is a QUEUE: every row in it is waiting
+  // on a decision from this office, and each carries a Release button.
+  { id: 'onhold',     label: 'On hold' },
+  { id: 'completed',  label: 'Completed' },
+  { id: 'overdue',    label: 'Overdue' },
+  { id: 'cancelled',  label: 'Cancelled' },
+  // Everything above is a STATE a job is in, and they are mutually exclusive.
+  // These two are properties that cut ACROSS those states — a discounted job is
+  // also upcoming or completed — so their counts deliberately overlap the ones
+  // to their left. Rendered identically they read as more states that refuse to
+  // add up, so they are divided off.
+  { id: 'discounted', label: 'Discounted', aspect: true },
+  { id: 'free',       label: 'Free', aspect: true },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
+
+// Single source of truth for tab membership, kept in lockstep with
+// src/lib/metrics.ts `jobStatusWhere` so a tab's COUNT and its filtered LIST
+// always use the exact same predicate:
+//   upcoming  = future start AND not cancelled AND not on hold AND not
+//               genuinely completed
+//   onhold    = CREATED (round 4, fix 6 — no date test: a hold outlives its
+//               own date, and the stale ones are the ones to find)
+//   completed = (COMPLETED | PAID) AND the job has actually happened
+//   overdue   = COMPLETED AND unpaid
+//   cancelled = CANCELLED
+//   free      = price null / 0
+// (`discounted` is a jobs-list convenience bucket, not a metrics bucket.)
+//
+// Round 4, fix 1: `upcoming` and `completed` are no longer spelled out here.
+// They delegate to `isUpcomingJob` / `isCompletedJob` in metrics-shared, which
+// `jobStatusWhere` mirrors in SQL — the Completed tab used to be a bare
+// `status ∈ {COMPLETED, PAID}` with no date test, which is how tomorrow's jobs
+// ended up under Completed with a green pill (PDF p1 / IMG-1).
+function jobMatchesTab(
+  tab: TabId,
+  job: Job,
+  now: number
+): boolean {
+  const at = new Date(now);
+  switch (tab) {
+    case 'all':
+      // Cancelled work is not the day's work. It keeps its own tab (and its
+      // own count), but it no longer pads the All list or the stat cards
+      // derived from it — ten jobs with two cancelled is eight jobs.
+      return job.status !== 'CANCELLED';
+    case 'upcoming':
+      return isUpcomingJob(job, at);
+    case 'onhold':
+      return isOnHoldJob(job);
+    case 'completed':
+      return isCompletedJob(job, at);
+    case 'overdue':
+      // Unpaid work we've already done. The completion guard applies for the
+      // same reason it does above — an unpaid job dated next week is not
+      // overdue, it just hasn't happened.
+      return job.status === 'COMPLETED' && !job.paymentReceived && isCompletedJob(job, at);
+    case 'cancelled':
+      return job.status === 'CANCELLED';
+    case 'discounted':
+      return (job.discountAmount || 0) > 0;
+    case 'free':
+      // Free means the job is worth nothing, not that its BASE line is zero
+      // (fix 3). A $0 base with $58 of grout on it was landing in this tab.
+      return activeSubtotal(job) === 0;
+    default:
+      return true;
+  }
+}
+
+// ── Paginator ─────────────────────────────────────────────────────────────────
+
+function APager({
+  page, totalPages, totalJobs, rowsPerPage, startIndex, pageNumbers,
+  onPageChange,
+}: {
+  page: number; totalPages: number; totalJobs: number; rowsPerPage: number;
+  startIndex: number; pageNumbers: number[]; onPageChange: (p: number) => void;
+}) {
+  const end = Math.min(startIndex + rowsPerPage, totalJobs);
+  if (totalJobs === 0) return null;
+  return (
+    <div className="apager">
+      <span>Showing {startIndex + 1}–{end} of {totalJobs}</span>
+      <div className="apager-controls">
+        <button className="apager-btn" onClick={() => onPageChange(1)} disabled={page === 1}>«</button>
+        <button className="apager-btn" onClick={() => onPageChange(page - 1)} disabled={page === 1}>‹</button>
+        {pageNumbers.map(n => (
+          <button key={n} className={`apager-btn ${page === n ? 'active' : ''}`} onClick={() => onPageChange(n)}>{n}</button>
+        ))}
+        <button className="apager-btn" onClick={() => onPageChange(page + 1)} disabled={page === totalPages}>›</button>
+        <button className="apager-btn" onClick={() => onPageChange(totalPages)} disabled={page === totalPages}>»</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Inline SVG icons ───────────────────────────────────────────────────────────
+
+const EditSvg = ({ size = 14 }: { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const ChevronRightSvg = ({ size = 14 }: { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+export default function JobsView({
+  jobs,
+  initialSubTab,
+  isLoading,
+  searchTerm,
+  statusFilter,
+  paymentFilter,
+  rowsPerPage,
+  page,
+  onSearchTermChange,
+  onStatusFilterChange,
+  onPaymentFilterChange,
+  onRowsPerPageChange,
+  onPageChange,
+  updateURLParams,
+  onCreateJob,
+  onEditJob,
+  clients = [],
+  users = [],
+  cleaners = [],
+  isAdmin = true,
+  archived = false,
+  startDate = '',
+  endDate = '',
+  jobTypeFilter = 'all',
+  clientFilter = 'all',
+  employeeFilter = 'all',
+  paymentTypeFilter = 'all',
+  onStartDateChange,
+  onEndDateChange,
+  onJobTypeFilterChange,
+  onClientFilterChange,
+  onEmployeeFilterChange,
+  onPaymentTypeFilterChange,
+  serviceOptions = [],
+}: JobsViewProps) {
+  // "All types" plus the configured services. Falls back to the shipped
+  // defaults so the filter is never empty.
+  const serviceFilterOptions = [
+    { value: "all", label: "All types" },
+    ...(serviceOptions.length > 0
+      ? serviceOptions
+      : catalogServiceOptions(DEFAULT_SERVICE_CATALOG)),
+  ];
+
+  const [tab, setTab] = useState<TabId>(
+    TABS.some(t => t.id === initialSubTab) ? (initialSubTab as TabId) : 'all'
+  );
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Optimistic per-row overrides for the $ / ✉ table actions — merged over the
+  // server-provided list so the row, pills, tabs, and stat cards all move the
+  // instant the icon is clicked, then reconciled by router.refresh().
+  const [rowOverrides, setRowOverrides] = useState<
+    Record<string, Partial<Pick<Job, 'paymentReceived' | 'invoiceSent' | 'status' | 'holdReason'>>>
+  >({});
+  const [payBusyId, setPayBusyId] = useState<string | null>(null);
+  // 'schedule' is the default because this page is opened to run the day.
+  // 'newest' is the old behaviour, kept because quoting and billing questions
+  // genuinely are "what did we book most recently".
+  const [sortMode, setSortMode] = useState<'schedule' | 'newest'>('schedule');
+  const effectiveJobs = useMemo(
+    () =>
+      Object.keys(rowOverrides).length === 0
+        ? jobs
+        : jobs.map(j => (rowOverrides[j.id] ? { ...j, ...rowOverrides[j.id] } : j)),
+    [jobs, rowOverrides]
+  );
+
+  // Tab-level filter (client-side). Upcoming is sorted soonest-first (past jobs
+  // already excluded by the predicate); every other tab keeps the server's
+  // most-recent-first order.
+  const tabJobs = useMemo(() => {
+    const now = Date.now();
+    const list = effectiveJobs.filter(j => jobMatchesTab(tab, j, now));
+    if (tab === 'upcoming') {
+      list.sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      );
+    } else if (sortMode === 'schedule') {
+      const cutoff = startOfYesterday(now);
+      list.sort((a, b) => compareOperational(a, b, cutoff));
+    }
+    // 'newest' keeps the server's most-recent-first order untouched.
+    return list;
+  }, [tab, effectiveJobs, sortMode]);
+
+  const tabCounts = useMemo(() => {
+    const now = Date.now();
+    // Derived from TABS rather than written out per tab. The hand-written
+    // object was cast `as Record<TabId, number>`, which told TypeScript it was
+    // complete instead of checking — so adding the On-hold tab (round 4, fix 6)
+    // compiled cleanly and rendered a blank count beside it. Mapping the tab
+    // list means a new tab cannot arrive without its count.
+    return Object.fromEntries(
+      TABS.map(t => [t.id, effectiveJobs.filter(j => jobMatchesTab(t.id, j, now)).length])
+    ) as Record<TabId, number>;
+  }, [effectiveJobs]);
+
+  // Additional filters stacked on top of tab filter
+  const filteredJobs = useMemo(() => {
+    return tabJobs.filter(job => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm ||
+        job.clientName.toLowerCase().includes(q) ||
+        (job.location && job.location.toLowerCase().includes(q));
+      // Filter on the DERIVED status so "Paid" (paymentReceived boolean or
+      // PAID enum) and "Completed" (incl. past-dated scheduled jobs the sweep
+      // hasn't flipped yet) match what the pill in the row says.
+      const matchesStatus = statusFilter === 'all' || simpleJobStatus(job) === statusFilter;
+      const matchesPayment = (() => {
+        if (paymentFilter === 'all') return true;
+        if (paymentFilter === 'paid') return job.paymentReceived;
+        if (paymentFilter === 'pending') return !job.paymentReceived && job.status === 'COMPLETED';
+        return true;
+      })();
+      // Match on normalized category so imported + manual jobType vocabularies
+      // both hit the same filter option.
+      const matchesType    = jobTypeFilter === 'all' ||
+        normalizeJobType(job.jobType) === (normalizeJobType(jobTypeFilter) ?? jobTypeFilter);
+      const matchesClient  = clientFilter === 'all' || job.clientId === clientFilter;
+      const matchesEmp     = employeeFilter === 'all' || job.cleaners.some(c => c.id === employeeFilter);
+      const matchesPayType = paymentTypeFilter === 'all' || job.paymentType === paymentTypeFilter;
+      const d = (job.jobDate || job.startTime).slice(0, 10);
+      const matchesFrom = !startDate || d >= startDate;
+      const matchesTo   = !endDate   || d <= endDate;
+      return matchesSearch && matchesStatus && matchesPayment && matchesType && matchesClient && matchesEmp && matchesPayType && matchesFrom && matchesTo;
+    });
+  }, [tabJobs, searchTerm, statusFilter, paymentFilter, jobTypeFilter, clientFilter, employeeFilter, paymentTypeFilter, startDate, endDate]);
+
+  // Stat cards are derived from the SAME list the table renders, so every
+  // filter (tab, date range, client, cleaner, type, pay type, payment status,
+  // search) moves the cards too. Previously these were four server counts over
+  // ALL jobs, so the cards sat frozen while the table filtered.
+  //
+  // Revenue uses the canonical rule from src/lib/metrics-shared (identical to
+  // the SQL `revenueWhere` the Dashboard/Analytics use): non-archived AND
+  // paymentReceived AND status ∈ {COMPLETED, PAID}, amount = price − discount −
+  // refund. "Scheduled value" is explicitly NOT revenue — it's the booked value
+  // of live work that hasn't been completed+paid yet, shown so a pipeline of
+  // priced-but-unpaid jobs doesn't read as "$0.00 revenue".
+  //
+  // Round 4, fix 1: the Completed and Pending-payment counters were the same
+  // bare status test the Completed tab used, so IMG-1's stat row read
+  // "Total Jobs 16 · Completed 16" over a list whose top two rows were dated
+  // TOMORROW. Both now go through `isCompletedJob`, the identical predicate
+  // behind the tab, its count, and the Dashboard's SQL bucket.
+  const stats = useMemo(() => {
+    const at = new Date();
+    let completedJobs = 0;
+    let pendingPayment = 0;
+    let totalRevenue = 0;
+    let scheduledValue = 0;
+    for (const j of filteredJobs) {
+      const done = isCompletedJob(j, at);
+      if (done) completedJobs++;
+      if (done && j.status === 'COMPLETED' && !j.paymentReceived) pendingPayment++;
+      if (isRevenueJob(j)) totalRevenue += jobRevenue(j);
+      else if (isScheduledValueJob(j)) scheduledValue += jobScheduledValue(j);
+    }
+    return {
+      totalJobs: filteredJobs.length,
+      completedJobs,
+      pendingPayment,
+      totalRevenue,
+      scheduledValue,
+    };
+  }, [filteredJobs]);
+
+  const totalJobs  = filteredJobs.length;
+  const totalPages = Math.max(1, Math.ceil(totalJobs / rowsPerPage));
+  const startIndex = (page - 1) * rowsPerPage;
+  const paginatedJobs = filteredJobs.slice(startIndex, startIndex + rowsPerPage);
+
+  // ── Multi-select + bulk actions ────────────────────────────────────────────
+  const router = useRouter();
+
+  // Row-level $ / ✉ actions (spec item 9). Optimistic: override the row first,
+  // revert on failure, reconcile with a refresh either way.
+  async function handleTogglePaid(job: Job) {
+    const next = !job.paymentReceived;
+    // Mirrors the rule the server action applies (togglePaymentReceived), so
+    // the optimistic row and the refreshed one agree. Round 4, fix 1: marking a
+    // FUTURE job paid no longer flips it to PAID — a lifecycle status — it just
+    // records the payment and leaves the job where it is on the calendar.
+    const optimisticStatus = job.status === 'CANCELLED'
+      ? job.status
+      : next
+        ? (isFutureJob(job) ? job.status : 'PAID')
+        : new Date(job.startTime).getTime() < Date.now() ? 'COMPLETED' : 'SCHEDULED';
+    setPayBusyId(job.id);
+    setRowOverrides(o => ({
+      ...o,
+      [job.id]: { ...o[job.id], paymentReceived: next, status: optimisticStatus },
+    }));
+    try {
+      const res = await togglePaymentReceived(job.id);
+      if (!res?.success) {
+        setRowOverrides(o => ({
+          ...o,
+          [job.id]: { ...o[job.id], paymentReceived: job.paymentReceived, status: job.status },
+        }));
+        alert(res?.error || 'Failed to update payment status');
+      }
+    } finally {
+      setPayBusyId(null);
+      router.refresh();
+    }
+  }
+
+  /**
+   * Take a job off hold from the list (round 4, fix 6 — PDF: "admin should be
+   * able to release a job from On Hold").
+   *
+   * The confirm names the reason rather than asking a bare "are you sure?": the
+   * whole complaint behind this fix is that nobody could tell why a job was
+   * held, so the moment of releasing it is exactly when that has to be legible.
+   * Optimistic like the two handlers above, and it moves `holdReason` with the
+   * status so the row does not sit there Scheduled-but-still-explaining-itself.
+   */
+  async function handleReleaseHold(job: Job) {
+    if (
+      !window.confirm(
+        `Release this job from hold?\n\nReason on file: ${holdReasonText(job.holdReason)}\n\nIt becomes a Scheduled job and appears on the cleaners' schedules.`
+      )
+    ) return;
+    setPayBusyId(job.id);
+    setRowOverrides(o => ({
+      ...o,
+      [job.id]: { ...o[job.id], status: 'SCHEDULED', holdReason: null },
+    }));
+    try {
+      const res = await releaseJobHold(job.id);
+      if (!res.success) {
+        setRowOverrides(o => ({
+          ...o,
+          [job.id]: { ...o[job.id], status: job.status, holdReason: job.holdReason ?? null },
+        }));
+        alert(res.error);
+      }
+    } finally {
+      setPayBusyId(null);
+      router.refresh();
+    }
+  }
+
+  async function handleToggleInvoice(job: Job) {
+    const next = !job.invoiceSent;
+    setPayBusyId(job.id);
+    setRowOverrides(o => ({ ...o, [job.id]: { ...o[job.id], invoiceSent: next } }));
+    try {
+      // Marking sent generates the invoice record on first use (idempotent);
+      // un-marking just clears the flag.
+      const res = next
+        ? await generateInvoiceFromJob(job.id)
+        : await toggleInvoiceSent(job.id);
+      if (!res?.success) {
+        setRowOverrides(o => ({ ...o, [job.id]: { ...o[job.id], invoiceSent: job.invoiceSent } }));
+        alert(('error' in (res ?? {}) && (res as { error?: string }).error) || 'Failed to update invoice status');
+      }
+    } finally {
+      setPayBusyId(null);
+      router.refresh();
+    }
+  }
+
+  const visibleIds = useMemo(() => paginatedJobs.map(j => j.id), [paginatedJobs]);
+  const sel = useRowSelection(visibleIds);
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignCleanerId, setAssignCleanerId] = useState('');
+  const [showStatus, setShowStatus] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function runAssign() {
+    if (!assignCleanerId || sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkAssignCleaner(sel.selectedIds, assignCleanerId);
+      if (!res.success) { alert(res.error); return; }
+      // Availability conflicts never block the assign — surface them so the
+      // admin knows they've booked someone outside their hours / on time off.
+      if (res.warnings && res.warnings.length > 0) {
+        alert(
+          `Assigned, but note:\n\n${res.warnings.join('\n')}`
+        );
+      }
+      setShowAssign(false);
+      setAssignCleanerId('');
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runSetStatus(status: string) {
+    if (sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkSetJobStatus(sel.selectedIds, status);
+      if (!res.success) { alert(res.error); return; }
+      setShowStatus(false);
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: 'restore',
+          label: 'Restore',
+          icon: <RotateCcw size={14} />,
+          onRun: async () => {
+            await bulkRestore('job', sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+        {
+          key: 'permanent-delete',
+          label: 'Delete permanently',
+          icon: <Trash2 size={14} />,
+          variant: 'danger',
+          confirm: `Permanently delete ${sel.count} archived job${sel.count === 1 ? '' : 's'}? This cannot be undone — the job is removed from Jobs, Calendar, Archived, cleaner views and payroll. Use this only for test jobs, duplicate imports, or incorrect imports.`,
+          onRun: async () => {
+            const res = await permanentlyDeleteJobs(sel.selectedIds);
+            if ('error' in res && res.error) { alert(res.error); return; }
+            // Jobs with chat history are kept, so say so — otherwise a
+            // selection of 5 silently deletes 3 and looks like it worked.
+            if ('skipped' in res && res.skipped > 0) {
+              alert(`Deleted ${res.count}. Job${res.skipped === 1 ? '' : 's'} #${res.skippedJobNumbers.join(', #')} ${res.skipped === 1 ? 'has' : 'have'} chat history and stayed archived.`);
+            }
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ]
+    : [
+        {
+          key: 'assign',
+          label: 'Assign cleaner',
+          icon: <UserPlus size={14} />,
+          onRun: () => { setShowStatus(false); setShowAssign(true); },
+        },
+        {
+          key: 'status',
+          label: 'Change status',
+          icon: <Tag size={14} />,
+          onRun: () => { setShowAssign(false); setShowStatus(true); },
+        },
+        {
+          key: 'cancel',
+          label: 'Cancel',
+          icon: <XCircle size={14} />,
+          onRun: async () => {
+            await bulkCancelJobs(sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+        {
+          key: 'delete',
+          label: 'Delete',
+          icon: <Trash2 size={14} />,
+          variant: 'danger',
+          confirm: `Delete ${sel.count} selected job${sel.count === 1 ? '' : 's'}? They can be restored from Archived.`,
+          onRun: async () => {
+            await bulkSoftDelete('job', sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ];
+
+  const pageNumbers = useMemo(() => {
+    const count = Math.min(5, totalPages);
+    const pages: number[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (page <= 3) {
+      for (let i = 1; i <= count; i++) pages.push(i);
+    } else if (page >= totalPages - 2) {
+      for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+    } else {
+      for (let i = page - 2; i <= page + 2; i++) pages.push(i);
+    }
+    return pages;
+  }, [page, totalPages]);
+
+  const goToPage = (newPage: number) => {
+    onPageChange(newPage);
+    updateURLParams({ page: newPage });
+  };
+
+  const hasActiveFilters =
+    !!startDate || !!endDate || jobTypeFilter !== 'all' || clientFilter !== 'all' ||
+    employeeFilter !== 'all' || paymentTypeFilter !== 'all' || statusFilter !== 'all' || paymentFilter !== 'all';
+
+  const activeFilterCount = [
+    startDate, endDate, jobTypeFilter !== 'all', clientFilter !== 'all',
+    employeeFilter !== 'all', paymentTypeFilter !== 'all', statusFilter !== 'all', paymentFilter !== 'all',
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    onStartDateChange?.('');
+    onEndDateChange?.('');
+    onJobTypeFilterChange?.('all');
+    onClientFilterChange?.('all');
+    onEmployeeFilterChange?.('all');
+    onPaymentTypeFilterChange?.('all');
+    onStatusFilterChange('all');
+    onPaymentFilterChange('all');
+    onPageChange(1);
+    updateURLParams({ status: 'all', payment: 'all', page: 1 });
+  };
+
+  return (
+    <div className="admin-font">
+      {/* Header */}
+      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 32, gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <p className="admin-eyebrow">Operations</p>
+          <h1 className="admin-page-title">
+            Jobs{' '}
+            <span style={{ color: 'var(--primary-40)', fontWeight: 300 }}>· {stats.totalJobs}</span>
+          </h1>
+        </div>
+        <Button variant="primary" border={false} onClick={onCreateJob} className="rounded-xl px-5 py-2.5">
+          <Plus className="w-4 h-4 mr-2" /> New job
+        </Button>
+      </header>
+
+      {/* Stats — all five reflect the CURRENT filters (see the `stats` memo). */}
+      <div className="astat-grid" id="jstats" style={{ marginBottom: 28 }}>
+        <AStatCard
+          icon={CalendarClock}
+          label="Total jobs"
+          value={stats.totalJobs}
+          hint={hasActiveFilters || searchTerm || tab !== 'all' ? 'Matching filters' : undefined}
+        />
+        <AStatCard icon={CheckCircle2} label="Completed" value={stats.completedJobs} />
+        {/* "Total revenue $0.00" beside "$6,439.60 scheduled" reads as a
+            broken number rather than a true one. The value is right; the word
+            was wrong — this counts money actually IN, and naming it that makes
+            zero a fact instead of a fault. */}
+        <AStatCard
+          icon={DollarSign}
+          label="Collected"
+          value={`$${stats.totalRevenue.toFixed(2)}`}
+          hint="Completed and paid"
+        />
+        <AStatCard
+          icon={Wallet}
+          label="Scheduled value"
+          value={`$${stats.scheduledValue.toFixed(2)}`}
+          hint="Booked · not yet earned"
+        />
+        <AStatCard
+          icon={AlertTriangle}
+          label="Awaiting payment"
+          value={stats.pendingPayment}
+          hint={stats.pendingPayment > 0
+            ? `${stats.pendingPayment} job${stats.pendingPayment === 1 ? '' : 's'} done, not paid`
+            : 'Nothing outstanding'}
+        />
+      </div>
+      {/* .astat-grid is 4-up by default; this page has 5 cards. Scoped so the
+          shared 2-up mobile rule still applies. */}
+      <style>{`
+        @media (min-width: 901px) { #jstats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+      `}</style>
+
+      {/* Segmented tabs */}
+      <div style={{ marginBottom: 18 }}>
+        <div className="atabs">
+          {TABS.map((t, i) => (
+            <Fragment key={t.id}>
+              {/* The seam between "what state is this job in" and "what is
+                  true about it regardless of state". */}
+              {'aspect' in t && !('aspect' in TABS[i - 1]) && (
+                <span className="atab-divider" aria-hidden="true" />
+              )}
+              <button
+                type="button"
+                className={`atab ${tab === t.id ? 'active' : ''}`}
+                onClick={() => { setTab(t.id); onPageChange(1); }}
+                title={'aspect' in t
+                  ? 'Counts overlap the tabs on the left — a discounted job is also upcoming or completed.'
+                  : undefined}
+              >
+                {t.label}
+                <span className="atab-count">{tabCounts[t.id]}</span>
+              </button>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="atoolbar" style={{ marginBottom: showFilters ? 16 : 18 }}>
+        <div className="atoolbar-search">
+          <Search className="atoolbar-search-icon" size={16} />
+          <input
+            className="input"
+            type="search"
+            placeholder="Search by client, address…"
+            value={searchTerm}
+            onChange={(e) => {
+              // Search is filtered CLIENT-side (see filteredJobs); the server
+              // query ignores the term. Writing it to the URL per keystroke
+              // triggered an RSC re-render that remounted this input and dropped
+              // focus after every character. Keep it as local state only.
+              onSearchTermChange(e.target.value);
+              onPageChange(1);
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          className={`afilter-toggle ${showFilters ? 'open' : ''}`}
+          onClick={() => setShowFilters(v => !v)}
+        >
+          <Filter size={14} />
+          Filters
+          {activeFilterCount > 0 && <span className="afilter-badge">{activeFilterCount}</span>}
+        </button>
+        <div style={{ flex: 1 }} />
+        <PremiumSelect
+          value={sortMode}
+          onChange={(v) => { setSortMode(v as 'schedule' | 'newest'); onPageChange(1); }}
+          options={[
+            { value: 'schedule', label: 'Yesterday onward' },
+            { value: 'newest', label: 'Newest first' },
+          ]}
+          size="sm"
+          style={{ width: 168 }}
+        />
+        <PremiumSelect
+          value={String(rowsPerPage)}
+          onChange={(v) => { onRowsPerPageChange(parseInt(v, 10)); onPageChange(1); updateURLParams({ rowsPerPage: parseInt(v, 10), page: 1 }); }}
+          options={[10, 25, 50, 100].map(n => ({ value: String(n), label: `${n} rows` }))}
+          size="sm"
+          style={{ width: 110 }}
+        />
+      </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div className="afilter-panel" style={{ marginBottom: 20 }}>
+          <div className="field">
+            <label className="label">From</label>
+            <DatePicker value={startDate} onChange={(v) => onStartDateChange?.(v)} size="sm" />
+          </div>
+          <div className="field">
+            <label className="label">To</label>
+            <DatePicker value={endDate} onChange={(v) => onEndDateChange?.(v)} size="sm" />
+          </div>
+          <div className="field">
+            <label className="label">Job type</label>
+            <PremiumSelect
+              value={jobTypeFilter}
+              onChange={(v) => onJobTypeFilterChange?.(v)}
+              size="sm"
+              /* Filter options come from the Settings service catalog so they
+                 can never drift from what the job form offers (item 20). */
+              options={serviceFilterOptions}
+            />
+          </div>
+          <div className="field">
+            <label className="label">Job status</label>
+            <PremiumSelect
+              value={statusFilter}
+              onChange={(v) => { onStatusFilterChange(v); onPageChange(1); updateURLParams({ status: v, page: 1 }); }}
+              size="sm"
+              /* Values are `simpleJobStatus` outputs, which is what the filter
+                 compares against — so ON_HOLD had to be added here the moment
+                 that function learned to return it (round 4, fix 6). Without
+                 it "On hold" was the one status on the page you could see but
+                 not filter for. */
+              options={[
+                { value: "all", label: "Any status" },
+                { value: "ON_HOLD", label: HOLD_LABEL },
+                { value: "SCHEDULED", label: "Scheduled" },
+                { value: "IN_PROGRESS", label: "In Progress" },
+                { value: "COMPLETED", label: "Completed" },
+                { value: "PAID", label: "Paid" },
+                { value: "CANCELLED", label: "Cancelled" },
+              ]}
+            />
+          </div>
+          <div className="field">
+            <label className="label">Client</label>
+            <PremiumSelect
+              value={clientFilter}
+              onChange={(v) => onClientFilterChange?.(v)}
+              size="sm"
+              searchable={clients.length > 8}
+              options={[{ value: "all", label: "All clients" }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
+            />
+          </div>
+          <div className="field">
+            <label className="label">Employee</label>
+            <PremiumSelect
+              value={employeeFilter}
+              onChange={(v) => onEmployeeFilterChange?.(v)}
+              size="sm"
+              options={[{ value: "all", label: "Any employee" }, ...users.map(u => ({ value: u.id, label: u.name }))]}
+            />
+          </div>
+          <div className="field">
+            <label className="label">Pay type</label>
+            <PremiumSelect
+              value={paymentTypeFilter}
+              onChange={(v) => onPaymentTypeFilterChange?.(v)}
+              size="sm"
+              options={[
+                { value: "all", label: "Any pay type" },
+                { value: "CASH", label: "Cash" },
+                { value: "CHEQUE", label: "Cheque" },
+                { value: "E_TRANSFER", label: "E-Transfer" },
+                { value: "CREDIT_CARD", label: "Credit Card" },
+                { value: "OTHER", label: "Other" },
+              ]}
+            />
+          </div>
+          <div className="field">
+            <label className="label">Payment status</label>
+            <PremiumSelect
+              value={paymentFilter}
+              onChange={(v) => { onPaymentFilterChange(v); onPageChange(1); updateURLParams({ payment: v, page: 1 }); }}
+              size="sm"
+              options={[
+                { value: "all", label: "Any payment" },
+                { value: "paid", label: "Paid" },
+                { value: "pending", label: "Unpaid" },
+              ]}
+            />
+          </div>
+          <div className="afilter-panel-actions">
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 13, color: 'var(--primary-60)', fontFamily: 'inherit' }}
+            >
+              Reset filters
+            </button>
+            <Button variant="primary" border={false} size="sm" onClick={() => setShowFilters(false)} className="rounded-lg px-4">Done</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="atable-wrap" style={{ padding: '60px 40px', textAlign: 'center' }}>
+          <Loader className="w-4 h-4 animate-spin mx-auto mb-2" style={{ color: 'var(--primary)' }} />
+          <span style={{ fontSize: 14, color: 'var(--primary-60)' }}>Loading jobs…</span>
+        </div>
+      ) : totalJobs === 0 ? (
+        <div className="atable-wrap" style={{ padding: '80px 40px', textAlign: 'center' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--primary-5)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <Briefcase size={24} style={{ color: 'var(--primary-40)' }} />
+          </div>
+          {/* An empty list has three different causes and used to have one
+              sentence. "No jobs match these filters" printed even with NO
+              filters set, which makes a genuinely empty list and a query that
+              returned nothing look identical — and a viewer whose list is
+              scoped to their own jobs (decision D13: anyone who is not
+              OWNER/ADMIN) has no way at all to tell that from a broken page. */}
+          <p style={{ fontSize: 14, color: 'var(--primary-60)', marginBottom: 8 }}>
+            {hasActiveFilters || searchTerm
+              ? 'No jobs match your search or filters.'
+              : !isAdmin
+                ? 'No jobs are assigned to you. This list shows only jobs you are assigned to — ask an owner or admin for the full schedule.'
+                : archived
+                  ? 'Nothing has been archived yet.'
+                  : 'No jobs yet.'}
+          </p>
+          {/* Still gated on the FILTERS alone: `clearAllFilters` deliberately
+              leaves the search box alone, so offering it for a search-only miss
+              would be a button that changes nothing. */}
+          {hasActiveFilters && (
+            <button type="button" onClick={clearAllFilters} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--primary)', fontSize: 13, fontFamily: 'inherit' }}>
+              Reset filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="atable-wrap" id="jlist-desktop">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th className="col-select" style={{ width: 40, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={sel.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = sel.someSelected; }}
+                        onChange={sel.toggleAll}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Type</th>
+                    {/* Cleaners, Time and Pay type were three separate columns
+                        and all three were almost entirely dashes, while Status
+                        was squeezed onto two lines and the table scrolled
+                        sideways at 1440px. They are one fact about a job — who
+                        is on it, how they are paid, how long it took — so they
+                        are now one cell. */}
+                    <th>Crew &amp; pay</th>
+                    <th className="num">Price</th>
+                    <th className="num">Margin</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedJobs.map(job => (
+                    <tr key={job.id} onClick={() => router.push(`/admin/jobs/${job.id}`)}>
+                      <td className="col-select" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label="Select row"
+                          checked={sel.isSelected(job.id)}
+                          onChange={() => sel.toggle(job.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
+                      <td className="col-date">
+                        <div className="date-line">{formatDate(job.jobDate, job.startTime)}</div>
+                        <div className="time-line">{formatTime(job.startTime)}</div>
+                      </td>
+                      <td>
+                        <div className="col-client">
+                          {job.clientName}
+                          <JobChatUnreadPill jobId={job.id} scope="admin" />
+                        </div>
+                        {job.location && <div className="col-client-sub">{job.location.split(',')[0]}</div>}
+                      </td>
+                      <td><TypePill type={job.jobType} /></td>
+                      <td>
+                        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          {job.cleaners.length > 0
+                            ? <AvatarStack cleaners={job.cleaners} />
+                            : <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Unassigned</span>
+                          }
+                          {job.isCashJob && <CashPill />}
+                          {/* Only when there is a pay type to name. An
+                              assigned crew with none rendered "ZC —", and a
+                              dash beside an avatar reads as a broken value
+                              rather than an absent one. */}
+                          {!job.isCashJob && job.cleaners.length > 0 && (() => {
+                            const label = payTypeLabel(job.paymentType);
+                            return label && label !== '—' ? (
+                              <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{label}</span>
+                            ) : null;
+                          })()}
+                        </div>
+                        {(job.timeSpentMs ?? 0) > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                            {formatTimeSpent(job.timeSpentMs)} worked
+                          </div>
+                        )}
+                      </td>
+                      {/* The ACTIVE value of the job (fix 3): base + add-ons,
+                          or the override total. `job.price` is only the base
+                          service line, so this column used to read $128 on a
+                          job the customer was billed $186 of work for. */}
+                      <td className="num col-price">
+                        {job.price !== null ? `$${activeSubtotal(job).toFixed(2)}` : '—'}
+                        {job.usesFixedPrice && <span style={{ marginLeft: 6 }}><FixedPricePill /></span>}
+                        {/* A discount only means anything beside the price it
+                            came off, so it is the struck-through original
+                            rather than a column of its own. */}
+                        {(job.discountAmount || 0) > 0 && job.price !== null && (
+                          <div
+                            style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2, textDecoration: 'line-through' }}
+                            title={`$${job.discountAmount!.toFixed(2)} off`}>
+                            ${(activeSubtotal(job) + (job.discountAmount || 0)).toFixed(2)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="num">
+                        {typeof job.profitPct === 'number' && (job.price || 0) > 0 && job.profitKnown !== false
+                          ? <span className={`profit-pct ${profitClass(job.profitPct)}`}>{job.profitPct.toFixed(0)}%</span>
+                          : (
+                            <span
+                              style={{ color: 'var(--ink-soft)' }}
+                              title={job.profitKnown === false
+                                ? "This job has a crew but no pay recorded yet, so the margin isn't known."
+                                : undefined}>
+                              —
+                            </span>
+                          )
+                        }
+                      </td>
+                      <td>
+                        <JobStatusPill job={job} />
+                        {/* Fix 6 — the reason INLINE, not only on hover. The
+                            PDF's complaint is that a held job explained
+                            nothing; a tooltip alone would still make an admin
+                            hunt row by row for the one that needs attention. */}
+                        {isOnHold(job) && (
+                          <div
+                            title={holdReasonText(job.holdReason)}
+                            style={{
+                              marginTop: 4, fontSize: 11, lineHeight: 1.3,
+                              color: 'var(--amber-700)', maxWidth: 150,
+                              overflow: 'hidden', textOverflow: 'ellipsis',
+                              display: '-webkit-box', WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                            }}
+                          >
+                            {holdReasonText(job.holdReason)}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <PayIcons
+                          paymentReceived={job.paymentReceived}
+                          invoiceSent={job.invoiceSent}
+                          busy={payBusyId === job.id}
+                          onTogglePaid={() => handleTogglePaid(job)}
+                          onToggleInvoice={() => handleToggleInvoice(job)}
+                        />
+                      </td>
+                      <td className="col-actions">
+                        <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                          {/* Fix 6 — the release action, on the row that needs
+                              it. Archived jobs are excluded: restoring one is
+                              the decision there, not scheduling it. */}
+                          {!archived && isOnHold(job) && (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Release from hold"
+                              title={`Release from hold — ${holdReasonText(job.holdReason)}`}
+                              disabled={payBusyId === job.id}
+                              onClick={(e) => { e.stopPropagation(); handleReleaseHold(job); }}
+                              style={{ width: 30, height: 30, color: 'var(--amber-700)' }}
+                            >
+                              <PlayCircle size={14} />
+                            </button>
+                          )}
+                          {archived ? (
+                            <>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Restore"
+                              title="Restore"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await bulkRestore('job', [job.id]);
+                                router.refresh();
+                              }}
+                              style={{ width: 30, height: 30 }}
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Delete permanently"
+                              title="Delete permanently"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!window.confirm('Permanently delete this archived job? This cannot be undone — it is removed from Jobs, Calendar, Archived, cleaner views and payroll.')) return;
+                                const res = await permanentlyDeleteJobs([job.id]);
+                                if ('error' in res && res.error) { alert(res.error); return; }
+                                router.refresh();
+                                // Single-job path: a chat-bearing job comes back
+                                // as the error above, so nothing to report here.
+                              }}
+                              style={{ width: 30, height: 30, color: 'var(--error)' }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            </>
+                          ) : (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Edit"
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
+                            style={{ width: 30, height: 30 }}
+                          >
+                            <EditSvg size={14} />
+                          </button>
+                          )}
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="View"
+                            onClick={(e) => { e.stopPropagation(); router.push(`/admin/jobs/${job.id}`); }}
+                            style={{ width: 30, height: 30 }}
+                          >
+                            <ChevronRightSvg size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <APager
+              page={page} totalPages={totalPages} totalJobs={totalJobs}
+              rowsPerPage={rowsPerPage} startIndex={startIndex}
+              pageNumbers={pageNumbers} onPageChange={goToPage}
+            />
+          </div>
+
+          {/* Mobile cards */}
+          <div id="jlist-mobile" style={{ display: 'none', flexDirection: 'column', gap: 10 }}>
+            {paginatedJobs.map(job => (
+              <article key={job.id} className="jcard" onClick={() => router.push(`/admin/jobs/${job.id}`)}>
+                <div className="jcard-top">
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select row"
+                      checked={sel.isSelected(job.id)}
+                      onChange={() => sel.toggle(job.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ cursor: 'pointer', marginTop: 3 }}
+                    />
+                    <div>
+                    <div className="jcard-client">{job.clientName}</div>
+                    <div className="jcard-meta">{formatDate(job.jobDate, job.startTime)} · {formatTime(job.startTime)}</div>
+                    {job.location && <div className="jcard-meta">{job.location.split(',')[0]}</div>}
+                    </div>
+                  </div>
+                  <JobStatusPill job={job} />
+                </div>
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <TypePill type={job.jobType} />
+                  {job.isCashJob && <CashPill />}
+                  {job.usesFixedPrice && <FixedPricePill />}
+                  <AvatarStack cleaners={job.cleaners} max={2} />
+                </div>
+                {/* Fix 6 — a phone has no hover, so the reason and the release
+                    action are both spelled out on the card. */}
+                {isOnHold(job) && (
+                  <div
+                    className="row"
+                    style={{ gap: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+                  >
+                    <span style={{ fontSize: 12, color: 'var(--amber-700)', flex: 1, minWidth: 140 }}>
+                      {holdReasonText(job.holdReason)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={payBusyId === job.id}
+                      onClick={(e) => { e.stopPropagation(); handleReleaseHold(job); }}
+                    >
+                      <PlayCircle size={13} /> Release
+                    </button>
+                  </div>
+                )}
+                <div className="jcard-row" style={{ paddingTop: 10, borderTop: '1px solid var(--primary-10)' }}>
+                  {/* Mobile card — same active figure as the table column
+                      above. `activeSubtotal` is already discount-net, so the
+                      old explicit subtraction would have applied it twice. */}
+                  <div className="jcard-price">
+                    {job.price !== null ? `$${activeSubtotal(job).toFixed(2)}` : '—'}
+                  </div>
+                  <div className="row" style={{ gap: 10 }}>
+                    <PayIcons
+                      paymentReceived={job.paymentReceived}
+                      invoiceSent={job.invoiceSent}
+                      busy={payBusyId === job.id}
+                      onTogglePaid={() => handleTogglePaid(job)}
+                      onToggleInvoice={() => handleToggleInvoice(job)}
+                    />
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label="Edit"
+                      style={{ width: 32, height: 32 }}
+                      onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
+                    >
+                      <EditSvg size={14} />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+            <APager
+              page={page} totalPages={totalPages} totalJobs={totalJobs}
+              rowsPerPage={rowsPerPage} startIndex={startIndex}
+              pageNumbers={pageNumbers} onPageChange={goToPage}
+            />
+          </div>
+
+          <style>{`
+            @media (min-width: 1100px) { #jlist-mobile { display: none !important; } }
+            @media (max-width: 1099px) {
+              #jlist-desktop { display: none !important; }
+              #jlist-mobile  { display: flex !important; }
+            }
+          `}</style>
+        </>
+      )}
+
+      {/* Bulk-action pickers (shown above the floating bar) */}
+      {sel.count > 0 && (showAssign || showStatus) && (
+        <div
+          style={{
+            position: 'sticky',
+            bottom: 76,
+            zIndex: 41,
+            display: 'flex',
+            justifyContent: 'center',
+            marginTop: 12,
+          }}
+        >
+          {showAssign && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: 10,
+                maxWidth: 'calc(100vw - 32px)',
+                background: '#fff',
+                border: '1px solid var(--primary-10)',
+                borderRadius: 12,
+                padding: '10px 14px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+                Assign to
+              </span>
+              <PremiumSelect
+                value={assignCleanerId}
+                onChange={setAssignCleanerId}
+                size="sm"
+                searchable={cleaners.length > 8}
+                style={{ width: 200 }}
+                options={[
+                  { value: '', label: 'Select a cleaner…' },
+                  ...cleaners.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
+              <Button
+                variant="primary"
+                border={false}
+                size="sm"
+                onClick={runAssign}
+                disabled={!assignCleanerId || bulkBusy}
+                className="rounded-lg px-4"
+              >
+                {bulkBusy ? 'Assigning…' : `Assign to ${sel.count}`}
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setShowAssign(false); setAssignCleanerId(''); }}
+                style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 13, color: 'var(--primary-60)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {showStatus && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: 8,
+                maxWidth: 'calc(100vw - 32px)',
+                background: '#fff',
+                border: '1px solid var(--primary-10)',
+                borderRadius: 12,
+                padding: '10px 14px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+                Set status to
+              </span>
+              {(['SCHEDULED', 'COMPLETED', 'PAID'] as const).map((s) => (
+                <Button
+                  key={s}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => runSetStatus(s)}
+                  disabled={bulkBusy}
+                  className="rounded-lg px-3"
+                >
+                  {s.charAt(0) + s.slice(1).toLowerCase()}
+                </Button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowStatus(false)}
+                style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 13, color: 'var(--primary-60)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <BulkActionBar
+        count={sel.count}
+        actions={bulkActions}
+        onClear={() => { sel.clear(); setShowAssign(false); setShowStatus(false); }}
+        noun="job"
+        total={visibleIds.length}
+        allSelected={sel.allSelected}
+        onToggleAll={sel.toggleAll}
+      />
+    </div>
+  );
+}

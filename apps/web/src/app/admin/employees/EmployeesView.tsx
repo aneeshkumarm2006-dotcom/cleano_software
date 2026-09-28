@@ -1,0 +1,706 @@
+"use client";
+
+import React from "react";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  Plus,
+  Users,
+  DollarSign,
+  Briefcase,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  SlidersHorizontal,
+  Trash2,
+  Power,
+  Layers,
+  UserCog,
+  Mail,
+  Archive,
+  ArchiveRestore,
+  RotateCcw,
+} from "lucide-react";
+import PremiumSelect from "@/components/ui/PremiumSelect";
+import ImportCsvButton from "@/components/csv/ImportCsvButton";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import {
+  bulkSetEmployeeActive,
+  previewEmployeeDeactivation,
+  bulkSetCleanerTier,
+  bulkSetFieldLead,
+} from "../actions/bulkEmployeeActions";
+import { sendLoginInvites } from "../actions/sendLoginInvites";
+import type { CleanerTier } from "@bookmops/core/pay";
+import { fmtDateTime } from "@/lib/time";
+import { avatarColor, initials } from "@/lib/avatar";
+
+interface Employee {
+  /** Last sign-in / app-open (business timezone). Null = never signed in. */
+  lastSeenAt?: string | null;
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  isActive?: boolean;
+  cleanerTier?: "TRAINEE" | "STANDARD" | "FIELD_LEAD";
+  fieldLeadId?: string | null;
+  completedJobsCount: number;
+  activeJobsCount: number;
+  totalRevenue: number;
+  unpaidJobs: number;
+}
+
+interface FieldLead {
+  id: string;
+  name: string;
+}
+
+const TIER_OPTIONS: { value: CleanerTier; label: string }[] = [
+  { value: "TRAINEE", label: "Trainee" },
+  { value: "STANDARD", label: "Standard" },
+  { value: "FIELD_LEAD", label: "Field Lead" },
+];
+
+interface EmployeeStats {
+  totalEmployees: number;
+  inactiveEmployees: number;
+  admins: number;
+  activeEmployees: number;
+  totalRevenue: number;
+}
+
+interface EmployeesViewProps {
+  employees: Employee[];
+  stats: EmployeeStats;
+  isLoading: boolean;
+  searchTerm: string;
+  roleFilter: string;
+  jobStatusFilter: string;
+  rowsPerPage: number;
+  page: number;
+  archived: boolean;
+  fieldLeads: FieldLead[];
+  onSearchTermChange: (term: string) => void;
+  onRoleFilterChange: (filter: string) => void;
+  onJobStatusFilterChange: (filter: string) => void;
+  onRowsPerPageChange: (rowsPerPage: number) => void;
+  onPageChange: (page: number) => void;
+  updateURLParams: (updates: Record<string, string | number>) => void;
+  onCreateEmployee: () => void;
+  onEditEmployee: (employee: Employee) => void;
+}
+
+function RolePill({ role }: { role: string }) {
+  const cfg: Record<string, { bg: string; color: string; label: string }> = {
+    OWNER:    { bg: "#e0f2f1", color: "var(--primary)", label: "Owner" },
+    ADMIN:    { bg: "#e0e7ff", color: "#4338ca", label: "Admin" },
+    EMPLOYEE: { bg: "var(--slate-100)", color: "#475569", label: "Employee" },
+  };
+  const c = cfg[role] ?? cfg.EMPLOYEE;
+  return (
+    <span style={{
+      display: "inline-block",
+      background: c.bg,
+      color: c.color,
+      fontSize: 11,
+      fontWeight: 600,
+      borderRadius: 20,
+      padding: "2px 10px",
+      letterSpacing: "0.02em",
+    }}>
+      {c.label}
+    </span>
+  );
+}
+
+function AStatCard({ icon: Icon, label, value, hint, warn }: {
+  icon: React.ElementType; label: string; value: string; hint?: string; warn?: boolean;
+}) {
+  return (
+    <div className="astat" style={warn ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+      <div className="astat-head" style={warn ? { color: "var(--amber-800)" } : {}}>
+        <span>{label}</span>
+        <span className="astat-icon" style={warn ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
+          <Icon size={15} />
+        </span>
+      </div>
+      <div className="astat-value" style={warn ? { color: "var(--amber-800)" } : {}}>{value}</div>
+      {hint && <div className="astat-delta">{hint}</div>}
+    </div>
+  );
+}
+
+export default function EmployeesView({
+  employees,
+  stats,
+  isLoading,
+  searchTerm,
+  roleFilter,
+  jobStatusFilter,
+  rowsPerPage,
+  page,
+  archived,
+  fieldLeads,
+  onSearchTermChange,
+  onRoleFilterChange,
+  onJobStatusFilterChange,
+  onRowsPerPageChange,
+  onPageChange,
+  updateURLParams,
+  onCreateEmployee,
+  onEditEmployee,
+}: EmployeesViewProps) {
+  const router = useRouter();
+  const [showFilters, setShowFilters] = React.useState(false);
+  // Which secondary bulk menu is open above the action bar (tier / field lead).
+  const [bulkMenu, setBulkMenu] = React.useState<null | "tier" | "fieldLead">(
+    null
+  );
+
+  const filteredEmployees = employees.filter((e) => {
+    const q = searchTerm.toLowerCase();
+    if (searchTerm && !e.name.toLowerCase().includes(q) && !e.email.toLowerCase().includes(q) && !(e.phone?.includes(searchTerm))) return false;
+    if (roleFilter !== "all" && e.role !== roleFilter) return false;
+    if (jobStatusFilter === "active" && e.activeJobsCount === 0) return false;
+    if (jobStatusFilter === "completed" && e.completedJobsCount === 0) return false;
+    if (jobStatusFilter === "unpaid" && e.unpaidJobs === 0) return false;
+    return true;
+  });
+
+  const total = filteredEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
+  const startIdx = (page - 1) * rowsPerPage;
+  const paginated = filteredEmployees.slice(startIdx, startIdx + rowsPerPage);
+
+  const visibleIds = React.useMemo(() => paginated.map((e) => e.id), [paginated]);
+  const selection = useRowSelection(visibleIds);
+  const { selectedIds, clear } = selection;
+
+  // Run a bulk mutation, then clear the selection and refresh server data.
+  const runBulk = async (
+    fn: () => Promise<{ success: boolean; error?: string }>
+  ) => {
+    const res = await fn();
+    if (!res.success) {
+      throw new Error(res.error || "Bulk action failed");
+    }
+    setBulkMenu(null);
+    clear();
+    router.refresh();
+  };
+
+  // Sept 17, item 23: "admin should see a warning before deactivating the
+  // cleaner showing how many future jobs will be affected."
+  //
+  // The count is asked for first rather than written into a fixed confirmation
+  // string, because the number IS the warning — "this will affect some jobs"
+  // is what the admin already assumed. The same predicate produces this count
+  // and does the unassigning, so the dialog cannot promise one thing and do
+  // another.
+  const deactivateSelected = async () => {
+    const preview = await previewEmployeeDeactivation(selectedIds);
+    if (!preview.success) throw new Error(preview.error);
+    const { jobCount, leftUnassigned } = preview.impact;
+
+    const who = selectedIds.length === 1 ? "this cleaner" : `these ${selectedIds.length} cleaners`;
+    const lines =
+      jobCount === 0
+        ? [`Deactivate ${who}? They have no upcoming jobs.`]
+        : [
+            `Deactivate ${who}?`,
+            "",
+            `They will be taken off ${jobCount} upcoming job${jobCount === 1 ? "" : "s"}.`,
+            leftUnassigned > 0
+              ? `${leftUnassigned} of those will have NOBODY assigned and will need reassigning.`
+              : "Every one of those jobs still has another cleaner on it.",
+            "",
+            "Past and completed jobs are not changed — they keep the cleaner for payroll and history.",
+          ];
+    if (!window.confirm(lines.join("\n"))) return;
+
+    await runBulk(() => bulkSetEmployeeActive(selectedIds, false));
+  };
+
+  const applyTier = async (tier: CleanerTier) => {
+    await runBulk(() => bulkSetCleanerTier(selectedIds, tier));
+  };
+
+  const applyFieldLead = async (fieldLeadId: string | null) => {
+    await runBulk(() => bulkSetFieldLead(selectedIds, fieldLeadId));
+  };
+
+  // Archived rows only offer Restore; active rows get the full action set.
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: () => runBulk(() => bulkRestore("employee", selectedIds)),
+        },
+      ]
+    : [
+        {
+          key: "invite",
+          label: "Send invite",
+          icon: <Mail size={14} />,
+          onRun: async () => {
+            const res = await sendLoginInvites("cleaner", selectedIds);
+            if (res.success) {
+              alert(
+                `Invites sent to ${res.sent}.` +
+                  (res.skippedActive ? ` Skipped ${res.skippedActive} already logged in.` : "") +
+                  (res.skippedNoEmail ? ` ${res.skippedNoEmail} had no email.` : "")
+              );
+            } else {
+              alert(res.error ?? "Failed to send invites");
+            }
+            setBulkMenu(null);
+            clear();
+            router.refresh();
+          },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm:
+            "Archive the selected cleaners? They can be restored from the Archived view.",
+          onRun: () => runBulk(() => bulkSoftDelete("employee", selectedIds)),
+        },
+        {
+          key: "deactivate",
+          label: "Deactivate",
+          icon: <Power size={14} />,
+          onRun: deactivateSelected,
+        },
+        {
+          key: "activate",
+          label: "Activate",
+          icon: <Power size={14} />,
+          onRun: () => runBulk(() => bulkSetEmployeeActive(selectedIds, true)),
+        },
+        {
+          key: "tier",
+          label: "Set tier",
+          icon: <Layers size={14} />,
+          onRun: () => setBulkMenu((m) => (m === "tier" ? null : "tier")),
+        },
+        {
+          key: "fieldLead",
+          label: "Assign Field Lead",
+          icon: <UserCog size={14} />,
+          onRun: () =>
+            setBulkMenu((m) => (m === "fieldLead" ? null : "fieldLead")),
+        },
+      ];
+
+  const toggleArchived = () => {
+    // Reset page and selection when switching views.
+    onPageChange(1);
+    clear();
+    updateURLParams({ archived: archived ? "" : "1", page: 1 });
+  };
+
+  const goToPage = (p: number) => {
+    const np = Math.min(Math.max(1, p), totalPages);
+    onPageChange(np);
+    updateURLParams({ page: np });
+  };
+
+  const activeFilterCount = [roleFilter !== "all", jobStatusFilter !== "all"].filter(Boolean).length;
+
+  const clearFilters = () => {
+    onRoleFilterChange("all");
+    onJobStatusFilterChange("all");
+    onPageChange(1);
+    updateURLParams({ role: "all", jobStatus: "all", page: 1 });
+  };
+
+  return (
+    <div className="admin-font stack-24">
+      <header className="row-between" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+        <div className="stack-8">
+          <p className="eyebrow">Staff</p>
+          <h1 className="display">
+            Employees{" "}
+            <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.totalEmployees}</span>
+          </h1>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}
+            onClick={toggleArchived}
+            title={archived ? "Back to active cleaners" : "View archived cleaners"}>
+            {archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+            {archived ? "Active" : "Archived"}
+          </button>
+          {!archived && (
+            <>
+              <ImportCsvButton entity="employees" />
+              <button type="button" className="btn btn-primary" onClick={onCreateEmployee}>
+                <Plus size={16} /> Add Employee
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="astat-grid">
+        <AStatCard icon={Users}      label="Total employees"  value={String(stats.totalEmployees)} hint={stats.inactiveEmployees > 0 ? `${stats.inactiveEmployees} inactive` : "active staff"} />
+        <AStatCard icon={Users}      label="Admins"           value={String(stats.admins)} hint="admin or owner" />
+        <AStatCard icon={Briefcase}  label="Active now"       value={String(stats.activeEmployees)} hint="with active jobs" />
+        <AStatCard icon={DollarSign} label="Total revenue"    value={`$${stats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} />
+      </div>
+
+      <div className="atoolbar">
+        <div className="atoolbar-search">
+          <span className="atoolbar-search-icon"><Search size={14} /></span>
+          <input
+            className="input"
+            value={searchTerm}
+            onChange={e => { onSearchTermChange(e.target.value); onPageChange(1); updateURLParams({ search: e.target.value, page: 1 }); }}
+            placeholder="Search by name, email, or phone…"
+          />
+        </div>
+        <button
+          type="button"
+          className={`afilter-toggle${showFilters ? " open" : ""}`}
+          onClick={() => setShowFilters(v => !v)}>
+          <SlidersHorizontal size={14} />
+          Filters
+          {activeFilterCount > 0 && <span className="afilter-badge">{activeFilterCount}</span>}
+        </button>
+        <PremiumSelect
+          value={String(rowsPerPage)}
+          onChange={v => { onRowsPerPageChange(Number(v)); onPageChange(1); updateURLParams({ rowsPerPage: Number(v), page: 1 }); }}
+          options={[5, 10, 25, 50].map(n => ({ value: String(n), label: `${n} / page` }))}
+          size="sm"
+          style={{ width: 110 }}
+        />
+        <span style={{ fontSize: 13, color: "var(--primary-60)" }}>
+          {total} employee{total !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {showFilters && (
+        <div className="afilter-panel">
+          <div className="field">
+            <label className="label">Role</label>
+            <PremiumSelect
+              value={roleFilter}
+              onChange={v => { onRoleFilterChange(v); onPageChange(1); updateURLParams({ role: v, page: 1 }); }}
+              options={[
+                { value: "all", label: "All roles" },
+                { value: "OWNER", label: "Owner" },
+                { value: "ADMIN", label: "Admin" },
+                { value: "EMPLOYEE", label: "Employee" },
+              ]}
+              size="sm"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Job status</label>
+            <PremiumSelect
+              value={jobStatusFilter}
+              onChange={v => { onJobStatusFilterChange(v); onPageChange(1); updateURLParams({ jobStatus: v, page: 1 }); }}
+              options={[
+                { value: "all", label: "All" },
+                { value: "active", label: "Active jobs" },
+                { value: "completed", label: "Has completed" },
+                { value: "unpaid", label: "Has unpaid" },
+              ]}
+              size="sm"
+            />
+          </div>
+          <div className="afilter-panel-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>Clear all</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowFilters(false)}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          Loading employees…
+        </div>
+      ) : total === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          {archived ? "No archived cleaners." : "No employees match these filters."}
+        </div>
+      ) : (
+        <div className="atable-wrap">
+          <div id="emp-desktop">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40, paddingRight: 0 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all cleaners on this page"
+                        checked={selection.allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = selection.someSelected;
+                        }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
+                    <th>Employee</th>
+                    <th>Contact</th>
+                    <th>Role</th>
+                    <th>Last seen</th>
+                    <th className="num">Completed</th>
+                    <th className="num">Active</th>
+                    <th className="num">Revenue</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map(e => (
+                    <tr
+                      key={e.id}
+                      className={selection.isSelected(e.id) ? "row-selected" : undefined}
+                      onClick={() => { window.location.href = `/admin/employees/${e.id}`; }}>
+                      <td
+                        style={{ width: 40, paddingRight: 0 }}
+                        onClick={(ev) => ev.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${e.name}`}
+                          checked={selection.isSelected(e.id)}
+                          onChange={() => selection.toggle(e.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </td>
+                      <td style={{ minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
+                            {initials(e.name)}
+                          </span>
+                          <div>
+                            <div className="col-client">{e.name}</div>
+                            {e.email && <div className="col-client-sub">{e.email}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ minWidth: 160 }}>
+                        {e.phone ? (
+                          <div className="col-client-sub">{e.phone}</div>
+                        ) : (
+                          <span style={{ color: "var(--primary-40)" }}>—</span>
+                        )}
+                      </td>
+                      <td><RolePill role={e.role} /></td>
+                      <td>
+                        <span className="col-client-sub">
+                          {e.lastSeenAt ? fmtDateTime(e.lastSeenAt) : "Never signed in"}
+                        </span>
+                      </td>
+                      <td className="num">
+                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.completedJobsCount}</span>
+                      </td>
+                      <td className="num">
+                        {e.activeJobsCount > 0 ? (
+                          <span style={{ fontWeight: 600, color: "var(--emerald-600)" }}>{e.activeJobsCount}</span>
+                        ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
+                      </td>
+                      <td className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>
+                        ${e.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </td>
+                      <td className="col-actions" onClick={ev => ev.stopPropagation()}>
+                        <div className="row">
+                          <button type="button" className="icon-btn" title="Edit" onClick={() => onEditEmployee(e)}>
+                            <Pencil size={14} />
+                          </button>
+                          <a href={`/admin/employees/${e.id}`} className="btn btn-secondary btn-sm">View</a>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="emp-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
+            {paginated.map(e => (
+              <article key={e.id} className={`jcard${selection.isSelected(e.id) ? " row-selected" : ""}`} style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/employees/${e.id}`; }}>
+                <div className="jcard-top">
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${e.name}`}
+                      checked={selection.isSelected(e.id)}
+                      onClick={(ev) => ev.stopPropagation()}
+                      onChange={() => selection.toggle(e.id)}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
+                    <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
+                      {initials(e.name)}
+                    </span>
+                    <div>
+                      <div className="jcard-client">{e.name}</div>
+                      <div className="jcard-meta">{e.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="jcard-price">${e.totalRevenue.toFixed(0)}</div>
+                    <RolePill role={e.role} />
+                  </div>
+                </div>
+                <div className="jcard-row" style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", marginTop: 10 }}>
+                  <div style={{ fontSize: 12, color: "var(--primary-70)" }}>
+                    {e.completedJobsCount} done · {e.activeJobsCount} active
+                  </div>
+                  {e.unpaidJobs > 0 && (
+                    <div style={{ fontSize: 12, color: "var(--amber-600)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                      <AlertTriangle size={12} />
+                      {e.unpaidJobs} unpaid
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="apager">
+            <span>Showing {startIdx + 1}–{Math.min(startIdx + rowsPerPage, total)} of {total}</span>
+            <div className="apager-controls">
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(1)}>«</button>
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(page - 1)}>
+                <ChevronLeft size={14} />
+              </button>
+              <span className="apager-btn active">{page}</span>
+              <span style={{ fontSize: 12, color: "var(--primary-50)", alignSelf: "center" }}>/ {totalPages}</span>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+                <ChevronRight size={14} />
+              </button>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(totalPages)}>»</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selection.count > 0 && (
+        <div
+          style={{
+            position: "sticky",
+            bottom: 16,
+            zIndex: 40,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}>
+          {bulkMenu === "tier" && (
+            <div className="bulk-menu">
+              <div className="bulk-menu-title">Set tier for {selection.count}</div>
+              {TIER_OPTIONS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  className="bulk-menu-item"
+                  onClick={() => applyTier(t.value)}>
+                  <Layers size={14} /> {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {bulkMenu === "fieldLead" && (
+            <div className="bulk-menu">
+              <div className="bulk-menu-title">Assign Field Lead</div>
+              <button
+                type="button"
+                className="bulk-menu-item"
+                onClick={() => applyFieldLead(null)}>
+                <UserCog size={14} /> Unassign (clear group)
+              </button>
+              {fieldLeads.length === 0 ? (
+                <div className="bulk-menu-empty">No Field Leads yet.</div>
+              ) : (
+                fieldLeads.map((fl) => (
+                  <button
+                    key={fl.id}
+                    type="button"
+                    className="bulk-menu-item"
+                    onClick={() => applyFieldLead(fl.id)}>
+                    <UserCog size={14} /> {fl.name}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+          <BulkActionBar
+            count={selection.count}
+            noun="cleaner"
+            actions={bulkActions}
+            onClear={() => {
+              setBulkMenu(null);
+              clear();
+            }}
+            total={visibleIds.length}
+            allSelected={selection.allSelected}
+            onToggleAll={selection.toggleAll}
+          />
+        </div>
+      )}
+
+      <style>{`
+        @media (max-width: 900px) {
+          #emp-desktop { display: none !important; }
+          #emp-mobile  { display: flex !important; }
+        }
+        .atable tr.row-selected td { background: var(--primary-05, #f0fdfa); }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
+        .bulk-menu {
+          background: #fff;
+          border: 1px solid var(--primary-10, #e2e8f0);
+          border-radius: 12px;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+          padding: 6px;
+          min-width: 220px;
+          max-height: 260px;
+          overflow-y: auto;
+        }
+        .bulk-menu-title {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--primary-50, #64748b);
+          padding: 6px 10px;
+        }
+        .bulk-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          text-align: left;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--ink, #0f172a);
+          background: transparent;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 10px;
+          cursor: pointer;
+        }
+        .bulk-menu-item:hover { background: var(--primary-05, var(--slate-100)); }
+        .bulk-menu-empty {
+          font-size: 12px;
+          color: var(--primary-50, #64748b);
+          padding: 8px 10px;
+        }
+      `}</style>
+    </div>
+  );
+}

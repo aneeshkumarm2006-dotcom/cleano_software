@@ -1,0 +1,86 @@
+{
+  "expo": {
+    "name": "Bookmops Pro",
+    "slug": "bookmops-pro",
+    "scheme": "bookmopspro",
+    "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f4f7f8",
+    "icon": "./assets/images/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.bookmops.pro",
+      "supportsTablet": false,
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.bookmops.pro",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 240
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0e7f8d"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Bookmops Pro uses your camera to take before and after photos of a job, and photos of a problem you report to the office.",
+          "photosPermission": "Bookmops Pro lets you pick photos of a job from your library to send to the office. Only the photos you choose are sent.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "When you tap On my way, Bookmops Pro can send where you are once, so the office can see you're heading to the job. It isn't tracked after that.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ]
+    ],
+    "experiments": {
+      "reactCompiler": true
+    },
+    "description": "Bookmops Pro: your shifts, your route and your pay, in one place.",
+    "owner": "aneeshautomationss-team",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "012bc411-2deb-4348-832e-de1f4e7ef59a"
+      }
+    }
+  }
+}

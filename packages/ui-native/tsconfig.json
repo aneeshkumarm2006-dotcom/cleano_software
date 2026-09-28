@@ -1,0 +1,4 @@
+{
+  "extends": "@bookmops/typescript-config/react-native.json",
+  "include": ["src"]
+}

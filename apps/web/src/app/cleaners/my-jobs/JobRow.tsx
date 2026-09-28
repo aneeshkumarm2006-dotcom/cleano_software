@@ -1,0 +1,189 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, MapPin, Clock, DoorOpen } from "lucide-react";
+import PayBreakdownModal from "./PayBreakdownModal";
+import JobChatUnreadPill from "@/components/JobChatUnread";
+import { fmtDate, fmtTime } from "@/lib/time";
+import { jobTypeLabel } from "@bookmops/core/services";
+import { resolveAddressParts } from "@bookmops/core/property";
+
+interface MissingEquipmentInfo {
+  productId: string;
+  productName: string;
+  needed: number;
+  have: number;
+}
+
+interface JobRowProps {
+  job: any;
+  isMainEmployee: boolean;
+  missingEquipment?: MissingEquipmentInfo[];
+  /** Correct per-cleaner payout (tier calc / override) from the server. The
+      raw job.employeePay column is wrong for imports, so prefer this. */
+  cleanerPay?: number;
+}
+
+function statusClass(status: string) {
+  switch (status) {
+    case "COMPLETED": return "completed";
+    case "SCHEDULED": return "scheduled";
+    case "IN_PROGRESS": return "inprogress";
+    case "CANCELLED": return "cancelled";
+    case "PAID": return "paid";
+    default: return "created";
+  }
+}
+
+export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay }: JobRowProps) {
+  // Server-computed payout wins; fall back to the column only if it wasn't
+  // provided (e.g. a caller that hasn't been migrated yet).
+  const payAmount = cleanerPay != null ? cleanerPay : Number(job.employeePay);
+  const hasPay = cleanerPay != null || job.employeePay != null;
+  const router = useRouter();
+  const jobWithClock = job as any;
+  // The list reads the JOB-level clock columns, which since awerfixes.pdf item
+  // 6 are derived mirrors of the session rows: clockOutTime is null while
+  // ANYONE is still on the clock, so "in progress" here is now accurate on
+  // multi-cleaner jobs. It is still job-level, not per-cleaner — the card is a
+  // summary and the job page is where the per-cleaner truth lives.
+  const canClockIn = !jobWithClock.clockInTime && !["COMPLETED", "CANCELLED", "PAID"].includes(job.status);
+  const canClockOut = jobWithClock.clockInTime && !jobWithClock.clockOutTime;
+  const isCompleted = job.status === "COMPLETED" || job.status === "PAID" || jobWithClock.clockOutTime;
+  const instantPayoutEligible = job.status === "COMPLETED" && job.paymentReceived === true;
+
+  const [payModalOpen, setPayModalOpen] = useState(false);
+
+  // The pay breakdown only makes sense for PERCENTAGE jobs — FLAT/HOURLY jobs
+  // are a fixed payout, and opening a "why this price" view on them would imply
+  // pay is derived from the client's price. Matches the job-detail gate.
+  const payType: string = job.payType ?? "PERCENTAGE";
+  const payBreakdownAvailable = payType === "PERCENTAGE";
+  const payLabel =
+    payType === "FLAT" ? "Pay" : isCompleted ? "Earned" : "Est. pay";
+
+  const ctaLabel = canClockIn ? "Start job" : canClockOut ? "Complete job" : "View details";
+  const sc = statusClass(job.status);
+
+  // ROUND 4, FIX 7 — the card reads the job's own snapshot only. It has no
+  // `clientAddress` join (three paginated queries feed this list), so an
+  // apartment recorded ONLY against the saved address shows on the job page
+  // rather than here. The two cases that matter both live on the row: a typed
+  // `aptNumber`, and an imported unit at the tail of `location`.
+  const address = resolveAddressParts({
+    address: job.location,
+    aptNumber: job.aptNumber ?? null,
+  });
+
+  // Render the job date in the business timezone so a date-only value stored at
+  // UTC midnight does not roll back a day (fixes the "one day early" list bug).
+  const date = job.jobDate ? new Date(job.jobDate) : null;
+  const mo = date ? fmtDate(date, { month: "short" }).toUpperCase() : null;
+  const day = date ? fmtDate(date, { day: "numeric" }) : null;
+  const wd = date ? fmtDate(date, { weekday: "short" }).toUpperCase() : null;
+
+  return (
+    <>
+      <div
+        className={`cl-jobs2-card ${sc}`}
+        onClick={() => router.push(`/cleaners/my-jobs/${job.id}`)}>
+        {/* Date pill */}
+        <div className="cl-jobs2-datepill">
+          {mo && <span className="mo">{mo}</span>}
+          {day && <span className="day">{day}</span>}
+          {wd && <span className="wd">{wd}</span>}
+          {!date && <span className="mo" style={{ fontSize: 12 }}>—</span>}
+        </div>
+
+        {/* Meta */}
+        <div className="cl-jobs2-meta">
+          <div className="cl-jobs2-meta-head">
+            <span className="cl-jobs2-client">{job.clientName}</span>
+            <span className={`cl-pill ${sc}`}>{job.status.replace(/_/g, " ")}</span>
+            {jobTypeLabel(job.jobType) && (
+              <span className="cl-pill" style={{ background: "var(--primary-5)", color: "var(--primary)" }}>
+                {jobTypeLabel(job.jobType)}
+              </span>
+            )}
+            {instantPayoutEligible && (
+              <span className="cl-pill" style={{ background: "var(--warning-soft)", color: "var(--amber-700)" }}>Instant payout</span>
+            )}
+            <JobChatUnreadPill jobId={job.id} scope="cleaner" />
+
+            {missingEquipment.length > 0 && (
+              <button
+                type="button"
+                className="cl-job-card-warn"
+                onClick={(e) => { e.stopPropagation(); router.push(`/cleaners/my-inventory/resolve?jobId=${job.id}`); }}>
+                <AlertTriangle size={11} />
+                Missing equipment
+              </button>
+            )}
+          </div>
+          <div className="cl-jobs2-meta-rows">
+            {job.location && (
+              <span className="row">
+                <MapPin size={13} className="icon" />
+                <span className="txt">{address.street}</span>
+              </span>
+            )}
+            {/* ROUND 4, FIX 7 — its own row, not appended to the address.
+                `.txt` above is clamped to two lines, so on a narrow phone a
+                unit at the tail of a long address is not merely easy to miss,
+                it is CUT OFF. A short row of its own can't be. */}
+            {address.aptLabel && (
+              <span className="row">
+                <DoorOpen size={13} className="icon" />
+                <span className="cl-jobs2-apt">{address.aptLabel}</span>
+              </span>
+            )}
+            {job.startTime && (
+              <span className="row">
+                <Clock size={13} className="icon" />
+                {fmtTime(job.startTime)}
+                {job.endTime && <> – {fmtTime(job.endTime)}</>}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Side: pay + CTA */}
+        <div className="cl-jobs2-side">
+          {hasPay && isMainEmployee && (
+            payBreakdownAvailable ? (
+              <button
+                type="button"
+                className="cl-jobs2-pay"
+                onClick={(e) => { e.stopPropagation(); setPayModalOpen(true); }}>
+                <span className="lbl">{payLabel}</span>
+                ${payAmount.toFixed(2)}
+              </button>
+            ) : (
+              /* FLAT/HOURLY: a fixed amount — nothing to break down, and the
+                 breakdown must never hint at a % of the client's price. */
+              <div className="cl-jobs2-pay" style={{ cursor: "default" }}>
+                <span className="lbl">{payLabel}</span>
+                ${payAmount.toFixed(2)}
+              </div>
+            )
+          )}
+          <a
+            href={`/cleaners/my-jobs/${job.id}`}
+            className={`cl-jobs2-cta${isCompleted ? " solid" : ""}`}
+            onClick={(e) => e.stopPropagation()}>
+            {ctaLabel}
+          </a>
+        </div>
+      </div>
+
+      {payBreakdownAvailable && (
+        <PayBreakdownModal
+          jobId={job.id}
+          isOpen={payModalOpen}
+          onClose={() => setPayModalOpen(false)}
+        />
+      )}
+    </>
+  );
+}

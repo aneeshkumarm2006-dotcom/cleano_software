@@ -1,0 +1,27 @@
+{
+  "name": "@bookmops/core",
+  "version": "0.0.0",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    "./inventory": "./src/inventory/index.ts",
+    "./jobs": "./src/jobs/index.ts",
+    "./pay": "./src/pay/index.ts",
+    "./policy": "./src/policy/index.ts",
+    "./property": "./src/property/index.ts",
+    "./rating": "./src/rating/index.ts",
+    "./services": "./src/services/index.ts",
+    "./time": "./src/time/index.ts",
+    "./validation": "./src/validation/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@bookmops/eslint-config": "*",
+    "@bookmops/typescript-config": "*",
+    "eslint": "^9",
+    "typescript": "^5"
+  }
+}

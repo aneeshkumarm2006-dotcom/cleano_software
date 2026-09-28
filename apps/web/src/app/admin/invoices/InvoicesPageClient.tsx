@@ -1,0 +1,534 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { jobTypeLabel } from "@bookmops/core/services";
+import {
+  Search, Plus, FileText, DollarSign, AlertTriangle,
+  ChevronLeft, ChevronRight, Send, CheckCircle2, Clock, XCircle,
+  Eye, Loader, SlidersHorizontal, Ban, Trash2, RotateCcw, Archive,
+} from "lucide-react";
+import PremiumSelect from "@/components/ui/PremiumSelect";
+import CreateInvoiceModal from "./CreateInvoiceModal";
+import { sendInvoice } from "../actions/sendInvoice";
+import { updateInvoice } from "../actions/updateInvoice";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetInvoiceStatus } from "../actions/bulkSetInvoiceStatus";
+import { avatarColor, initials } from "@/lib/avatar";
+import { invoiceDisplayStatus } from "@/lib/invoice-status";
+
+interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  sortOrder: number;
+}
+
+interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+  clientAddress: string | null;
+  jobId: string | null;
+  jobClientName: string | null;
+  jobType: string | null;
+  jobDate: string | null;
+  subtotal: number;
+  gstAmount: number;
+  qstAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  notes: string | null;
+  dueDate: string | null;
+  sentAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  lineItems: LineItem[];
+}
+
+interface ClientOption {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  discountPercent?: number | null;
+}
+
+/** An invoice plus the status the screen should show — see @/lib/invoice-status. */
+type InvoiceRow = Invoice & { displayStatus: string };
+
+interface InvoicesPageClientProps {
+  invoices: Invoice[];
+  clients: ClientOption[];
+  taxConfig: { gstRate: number; qstRate: number; gstNumber: string; qstNumber: string };
+  archived: boolean;
+  /** Today as a STORE-timezone civil day ("2026-08-13"), from the server render. */
+  todayKey: string;
+}
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  DRAFT:     { label: "Draft",     bg: "var(--slate-100)", color: "#475569" },
+  SENT:      { label: "Sent",      bg: "#eff6ff", color: "#1d4ed8" },
+  PAID:      { label: "Paid",      bg: "#dcfce7", color: "#15803d" },
+  OVERDUE:   { label: "Overdue",   bg: "var(--amber-50)", color: "var(--amber-600)" },
+  CANCELLED: { label: "Cancelled", bg: "var(--danger-soft)", color: "var(--danger)" },
+};
+
+function StatusPill({ status }: { status: string }) {
+  const c = STATUS_CONFIG[status] ?? { label: status, bg: "var(--slate-100)", color: "#475569" };
+  return (
+    <span style={{ display: "inline-block", background: c.bg, color: c.color, fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px" }}>
+      {c.label}
+    </span>
+  );
+}
+
+function StatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case "SENT":      return <Send size={12} style={{ color: "#1d4ed8" }} />;
+    case "PAID":      return <CheckCircle2 size={12} style={{ color: "#15803d" }} />;
+    case "OVERDUE":   return <Clock size={12} style={{ color: "var(--amber-600)" }} />;
+    case "CANCELLED": return <XCircle size={12} style={{ color: "var(--danger)" }} />;
+    default:          return <FileText size={12} style={{ color: "#94a3b8" }} />;
+  }
+}
+
+export default function InvoicesPageClient({ invoices, clients, taxConfig, archived, todayKey }: InvoicesPageClientProps) {
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Held locally so Send and Mark paid move the row's status pill AND the
+  // Collected / Pending / Overdue tiles at once. `router.refresh()` alone left
+  // every one of them on the pre-action figure until the page re-queried, which
+  // on a money screen reads as the payment not having registered. Replaced
+  // wholesale by the next server payload.
+  const [liveInvoices, setLiveInvoices] = useState<Invoice[]>(invoices);
+  useEffect(() => { setLiveInvoices(invoices); }, [invoices]);
+
+  // One derived status per row, computed once, read by the tiles, the status
+  // filter, the pill, the icon, the due-date colour and the action guards — so
+  // none of them can disagree. Nothing writes `status = "OVERDUE"` anywhere in
+  // the app, which is why the tile below was permanently 0 while a 64-day-late
+  // invoice sat in the table; see @/lib/invoice-status for the rule.
+  const rows: InvoiceRow[] = useMemo(
+    () => liveInvoices.map((inv) => ({ ...inv, displayStatus: invoiceDisplayStatus(inv, todayKey) })),
+    [liveInvoices, todayKey]
+  );
+
+  const stats = useMemo(() => ({
+    total: rows.length,
+    collected: rows.filter(i => i.displayStatus === "PAID").reduce((s, i) => s + i.totalAmount, 0),
+    // Unchanged in substance: an overdue invoice is a SENT one whose due date
+    // has passed, so it was already inside this set and Pending does not move.
+    pending: rows.filter(i => i.displayStatus === "SENT" || i.displayStatus === "OVERDUE").reduce((s, i) => s + i.totalAmount, 0),
+    overdue: rows.filter(i => i.displayStatus === "OVERDUE").length,
+  }), [rows]);
+
+  const filtered = useMemo(() => rows.filter(inv => {
+    if (statusFilter && inv.displayStatus !== statusFilter) return false;
+    if (clientFilter && inv.clientId !== clientFilter) return false;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      return inv.invoiceNumber.toLowerCase().includes(q) || inv.clientName.toLowerCase().includes(q);
+    }
+    return true;
+  }), [rows, searchTerm, statusFilter, clientFilter]);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
+  const startIdx = (page - 1) * rowsPerPage;
+  const paginated = filtered.slice(startIdx, startIdx + rowsPerPage);
+  const goToPage = (p: number) => setPage(Math.min(Math.max(1, p), totalPages));
+
+  const visibleIds = useMemo(() => paginated.map((inv) => inv.id), [paginated]);
+  const selection = useRowSelection(visibleIds);
+
+  const afterBulk = () => { selection.clear(); router.refresh(); };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("invoice", selection.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "paid",
+          label: "Mark paid",
+          icon: <CheckCircle2 size={14} />,
+          onRun: async () => { await bulkSetInvoiceStatus(selection.selectedIds, "PAID"); afterBulk(); },
+        },
+        {
+          key: "void",
+          label: "Void",
+          icon: <Ban size={14} />,
+          onRun: async () => { await bulkSetInvoiceStatus(selection.selectedIds, "CANCELLED"); afterBulk(); },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} invoice${selection.count === 1 ? "" : "s"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("invoice", selection.selectedIds); afterBulk(); },
+        },
+      ];
+
+  const activeFilterCount = [statusFilter !== "", clientFilter !== ""].filter(Boolean).length;
+
+  /** Apply one invoice's new state locally, then let the refresh confirm it. */
+  const applyInvoice = (id: string, patch: Partial<Invoice>) => {
+    setLiveInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)));
+    router.refresh();
+  };
+
+  const handleSend = async (id: string) => {
+    setSendingId(id);
+    const r = await sendInvoice(id);
+    setSendingId(null);
+    if (!r.success) { setErrorMsg(r.error || "Failed to send"); return; }
+    // Mirrors the action: only a DRAFT becomes SENT — re-sending a SENT or
+    // OVERDUE invoice just restamps `sentAt` and must not un-overdue it.
+    applyInvoice(id, {
+      sentAt: new Date().toISOString(),
+      ...(liveInvoices.find((i) => i.id === id)?.status === "DRAFT" ? { status: "SENT" } : {}),
+    });
+  };
+
+  const handleMarkPaid = async (id: string) => {
+    setMarkingPaidId(id);
+    const r = await updateInvoice({ id, status: "PAID" });
+    setMarkingPaidId(null);
+    if (!r.success) { setErrorMsg(r.error || "Failed to mark paid"); return; }
+    applyInvoice(id, { status: "PAID", paidAt: new Date().toISOString() });
+  };
+
+  return (
+    <div className="admin-font stack-24">
+      <header className="row-between" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+        <div className="stack-8">
+          <p className="eyebrow">Finance</p>
+          <h1 className="display">
+            Invoices{" "}
+            <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.total}</span>
+          </h1>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a
+            href={archived ? "/admin/invoices" : "/admin/invoices?archived=1"}
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+            <Archive size={16} /> {archived ? "Active invoices" : "Archived"}
+          </a>
+          {!archived && (
+            <button type="button" className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+              <Plus size={16} /> New Invoice
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="astat-grid">
+        <div className="astat">
+          <div className="astat-head"><span>Total invoices</span><span className="astat-icon"><FileText size={15} /></span></div>
+          <div className="astat-value">{stats.total}</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head"><span>Collected</span><span className="astat-icon"><DollarSign size={15} /></span></div>
+          <div className="astat-value">${stats.collected.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          <div className="astat-delta">paid invoices</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head"><span>Pending</span><span className="astat-icon"><Clock size={15} /></span></div>
+          <div className="astat-value">${stats.pending.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          <div className="astat-delta">sent / overdue</div>
+        </div>
+        <div className="astat" style={stats.overdue > 0 ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+          <div className="astat-head" style={stats.overdue > 0 ? { color: "var(--amber-800)" } : {}}>
+            <span>Overdue</span>
+            <span className="astat-icon" style={stats.overdue > 0 ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
+              <AlertTriangle size={15} />
+            </span>
+          </div>
+          <div className="astat-value" style={stats.overdue > 0 ? { color: "var(--amber-800)" } : {}}>{stats.overdue}</div>
+          <div className="astat-delta">{stats.overdue > 0 ? "needs attention" : "all clear"}</div>
+        </div>
+      </div>
+
+      {errorMsg && (
+        <div style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "var(--danger)", display: "flex", gap: 10, alignItems: "center" }}>
+          <AlertTriangle size={14} />
+          <span style={{ flex: 1 }}>{errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "var(--danger)", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
+        </div>
+      )}
+
+      <div className="atoolbar">
+        <div className="atoolbar-search">
+          <span className="atoolbar-search-icon"><Search size={14} /></span>
+          <input
+            className="input"
+            value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+            placeholder="Search by invoice # or client…"
+          />
+        </div>
+        <button type="button" className={`afilter-toggle${showFilters ? " open" : ""}`} onClick={() => setShowFilters(v => !v)}>
+          <SlidersHorizontal size={14} />
+          Filters
+          {activeFilterCount > 0 && <span className="afilter-badge">{activeFilterCount}</span>}
+        </button>
+        <PremiumSelect
+          value={String(rowsPerPage)}
+          onChange={v => { setRowsPerPage(Number(v)); setPage(1); }}
+          options={[5, 10, 25, 50].map(n => ({ value: String(n), label: `${n} / page` }))}
+          size="sm"
+          style={{ width: 110 }}
+        />
+        <span style={{ fontSize: 13, color: "var(--primary-60)" }}>{total} invoice{total !== 1 ? "s" : ""}</span>
+      </div>
+
+      {showFilters && (
+        <div className="afilter-panel">
+          <div className="field">
+            <label className="label">Status</label>
+            <PremiumSelect
+              value={statusFilter}
+              onChange={v => { setStatusFilter(v); setPage(1); }}
+              options={[
+                { value: "", label: "All statuses" },
+                { value: "DRAFT", label: "Draft" },
+                { value: "SENT", label: "Sent" },
+                { value: "PAID", label: "Paid" },
+                { value: "OVERDUE", label: "Overdue" },
+                { value: "CANCELLED", label: "Cancelled" },
+              ]}
+              size="sm"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Client</label>
+            <PremiumSelect
+              value={clientFilter}
+              onChange={v => { setClientFilter(v); setPage(1); }}
+              options={[{ value: "", label: "All clients" }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
+              size="sm"
+            />
+          </div>
+          <div className="afilter-panel-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setStatusFilter(""); setClientFilter(""); setPage(1); }}>Clear all</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowFilters(false)}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {total === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          No invoices match these filters.
+        </div>
+      ) : (
+        <div className="atable-wrap">
+          <div id="inv-desktop">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all invoices"
+                        checked={selection.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = selection.someSelected; }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
+                    <th>Invoice</th>
+                    <th>Client</th>
+                    <th>Date</th>
+                    <th>Due</th>
+                    <th className="num">Amount</th>
+                    <th>Status</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map(inv => (
+                    <tr
+                      key={inv.id}
+                      className={selection.isSelected(inv.id) ? "row-selected" : undefined}
+                      onClick={() => { window.location.href = `/admin/invoices/${inv.id}`; }}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${inv.invoiceNumber}`}
+                          checked={selection.isSelected(inv.id)}
+                          onChange={() => selection.toggle(inv.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </td>
+                      <td style={{ minWidth: 140 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <StatusIcon status={inv.displayStatus} />
+                          <span className="col-client">{inv.invoiceNumber}</span>
+                        </div>
+                        {inv.jobType && <div className="col-client-sub">{jobTypeLabel(inv.jobType)}</div>}
+                      </td>
+                      <td style={{ minWidth: 180 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span className="avatar" style={{ background: avatarColor(inv.clientName), fontSize: 11, width: 28, height: 28, flexShrink: 0 }}>
+                            {initials(inv.clientName)}
+                          </span>
+                          <div className="col-client">{inv.clientName}</div>
+                        </div>
+                      </td>
+                      <td><span style={{ fontSize: 12, color: "var(--primary-70)" }}>{new Date(inv.createdAt).toLocaleDateString("en-US")}</span></td>
+                      <td>
+                        <span style={{ fontSize: 12, color: inv.displayStatus === "OVERDUE" ? "var(--amber-600)" : "var(--primary-70)" }}>
+                          {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-US") : "—"}
+                        </span>
+                      </td>
+                      <td className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>${inv.totalAmount.toFixed(2)}</td>
+                      <td><StatusPill status={inv.displayStatus} /></td>
+                      <td className="col-actions" onClick={e => e.stopPropagation()}>
+                        <div className="row" style={{ gap: 6 }}>
+                          <a href={`/admin/invoices/${inv.id}`} className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Eye size={12} /> View
+                          </a>
+                          {inv.displayStatus === "DRAFT" && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              disabled={sendingId === inv.id}
+                              onClick={() => handleSend(inv.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {sendingId === inv.id ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
+                              Send
+                            </button>
+                          )}
+                          {(inv.displayStatus === "SENT" || inv.displayStatus === "OVERDUE") && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              disabled={markingPaidId === inv.id}
+                              onClick={() => handleMarkPaid(inv.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {markingPaidId === inv.id ? <Loader size={12} className="animate-spin" /> : <DollarSign size={12} />}
+                              Paid
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="inv-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
+            {paginated.map(inv => (
+              <article key={inv.id} className={`jcard${selection.isSelected(inv.id) ? " row-selected" : ""}`} style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/invoices/${inv.id}`; }}>
+                <div className="jcard-top">
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${inv.invoiceNumber}`}
+                      checked={selection.isSelected(inv.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => selection.toggle(inv.id)}
+                      style={{ cursor: "pointer", width: 16, height: 16, marginTop: 2 }}
+                    />
+                    <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <StatusIcon status={inv.displayStatus} />
+                      <div className="jcard-client">{inv.invoiceNumber}</div>
+                    </div>
+                    <div className="jcard-meta">{inv.clientName}</div>
+                    {inv.dueDate && <div className="jcard-meta">Due {new Date(inv.dueDate).toLocaleDateString("en-US")}</div>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="jcard-price">${inv.totalAmount.toFixed(2)}</div>
+                    <div style={{ marginTop: 4 }}><StatusPill status={inv.displayStatus} /></div>
+                  </div>
+                </div>
+                <div className="jcard-row" style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", marginTop: 10, gap: 8 }} onClick={e => e.stopPropagation()}>
+                  <a href={`/admin/invoices/${inv.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>View</a>
+                  {inv.displayStatus === "DRAFT" && (
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={sendingId === inv.id} onClick={() => handleSend(inv.id)} style={{ flex: 1 }}>
+                      {sendingId === inv.id ? "Sending…" : "Send"}
+                    </button>
+                  )}
+                  {(inv.displayStatus === "SENT" || inv.displayStatus === "OVERDUE") && (
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={markingPaidId === inv.id} onClick={() => handleMarkPaid(inv.id)} style={{ flex: 1 }}>
+                      {markingPaidId === inv.id ? "Processing…" : "Mark Paid"}
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="apager">
+            <span>Showing {startIdx + 1}–{Math.min(startIdx + rowsPerPage, total)} of {total}</span>
+            <div className="apager-controls">
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(1)}>«</button>
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(page - 1)}><ChevronLeft size={14} /></button>
+              <span className="apager-btn active">{page}</span>
+              <span style={{ fontSize: 12, color: "var(--primary-50)", alignSelf: "center" }}>/ {totalPages}</span>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}><ChevronRight size={14} /></button>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(totalPages)}>»</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media (max-width: 900px) {
+          #inv-desktop { display: none !important; }
+          #inv-mobile  { display: flex !important; }
+        }
+        .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
+      `}</style>
+
+      <CreateInvoiceModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        clients={clients}
+        taxConfig={taxConfig}
+      />
+
+      <BulkActionBar
+        noun="invoice"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={selection.clear}
+        total={visibleIds.length}
+        allSelected={selection.allSelected}
+        onToggleAll={selection.toggleAll}
+      />
+    </div>
+  );
+}
