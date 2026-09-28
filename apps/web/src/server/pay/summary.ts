@@ -20,6 +20,7 @@ import type {
   PayResponse,
   PayoutsResponse,
   Withdrawal,
+  WithdrawalResponse,
   WithdrawalsResponse,
 } from "@bookmops/api/v1";
 import { computePayoutTotals } from "@bookmops/core/pay";
@@ -196,6 +197,33 @@ export function withdrawalOut(w: Prisma.WithdrawalGetPayload<{ select: typeof WI
     processedAt: w.processedAt ? w.processedAt.toISOString() : null,
     note: w.notes,
   };
+}
+
+/**
+ * A replayed POST /api/v1/pay/withdrawals, rebuilt from the stored row
+ * rather than a 30-day copy of the answer (the idempotency record keeps only
+ * the id). The row stores the net; the amount asked for is in the replayed
+ * request, whose body is byte-for-byte the original's (the key's hash
+ * matched), so the fee is exactly what was taken the first time: asked − net.
+ * Status and processedAt are as they are now; the balance is today's.
+ */
+export async function withdrawalReplayFor(
+  actor: Actor,
+  withdrawalId: string,
+  askedCents: number,
+): Promise<Result<WithdrawalResponse>> {
+  const row = await db.withdrawal.findFirst({
+    where: { id: withdrawalId, employeeId: actor.userId },
+    select: WITHDRAWAL_SELECT,
+  });
+  if (!row) return notFound("We couldn't find that withdrawal.");
+  const out = withdrawalOut(row);
+  const balance = await readBalance(actor.userId);
+  const netCents = out.netCents ?? out.amountCents;
+  return ok({
+    withdrawal: { ...out, feeCents: Math.max(0, askedCents - netCents) },
+    availableCents: balance.availableCents,
+  });
 }
 
 /** GET /api/v1/pay/withdrawals — newest first. Never the payment method. */

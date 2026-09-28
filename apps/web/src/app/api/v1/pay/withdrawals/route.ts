@@ -6,15 +6,16 @@
 // under a per-person lock in the same transaction as the insert, the check on
 // the amount asked for, the fee from the server's rate (409 FEE_CHANGED when
 // it isn't the one the person agreed to), the net recorded. The emails are
-// effects, sent after the commit and never for a replay.
+// effects, sent after the commit and never for a replay. A replay is rebuilt
+// from the stored row (withdrawalReplayFor); the answer itself isn't kept.
 import { WithdrawalRequest, WithdrawalResponse, WithdrawalsResponse } from "@bookmops/api/v1";
 import { z } from "zod";
 
 import { revalidateAfterWithdrawal } from "@/server/pay/revalidate";
-import { withdrawalsFor } from "@/server/pay/summary";
+import { withdrawalReplayFor, withdrawalsFor } from "@/server/pay/summary";
 import { requestWithdrawalService } from "@/server/pay/withdraw";
 import { ok } from "@/server/result";
-import { v1Route } from "@/server/v1/route";
+import { v1Route, type AuthedContext } from "@/server/v1/route";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,12 @@ export const POST = v1Route(
     response: WithdrawalResponse,
     idempotent: true,
     limit: WITHDRAWAL_LIMIT,
+    // Money: the idempotency record keeps the withdrawal's id, not the answer.
+    replay: {
+      ref: (answer: WithdrawalResponse) => ({ withdrawalId: answer.withdrawal.id }),
+      reread: (ctx: AuthedContext<WithdrawalRequest, undefined>, ref) =>
+        withdrawalReplayFor(ctx.actor, String(ref.withdrawalId), ctx.body.amountCents),
+    },
   },
   async (ctx) => {
     const result = await requestWithdrawalService(ctx.actor, {

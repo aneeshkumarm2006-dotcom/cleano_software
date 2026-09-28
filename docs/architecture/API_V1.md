@@ -423,7 +423,13 @@ out, breaks, withdrawals):
   - a retry returns the stored response and fires no effects;
   - the same key with a different method, path or body answers 422;
   - a key still in flight answers 409, `retryable: true`.
-- Records are kept at least as long as the correction window.
+- Records are kept at least as long as the correction window (30 days), then
+  deleted by the daily `/api/cron/api-retention` cron (CRON_SECRET, like the
+  other crons; registered in `apps/web/vercel.json`).
+- Sensitive answers aren't copied into the record: document signing (short-
+  lived signed links) and withdrawals (money) store only
+  `{"$replayRef": {id}}`, and a replay rebuilds the answer from current data
+  (`replay` in `v1Route`). Everything else stores its answer.
 - Server actions don't use it. The web has no offline queue, and a double
   submit is covered by the unique open-session index.
 

@@ -113,6 +113,31 @@ export interface RouteOptions<B extends z.ZodType | undefined, Q extends z.ZodTy
    * needs it (a drawn signature's strokes). Never above MAX_BODY_BYTES_CEILING.
    */
   maxBodyBytes?: number;
+  /**
+   * For an idempotent route whose answer shouldn't sit in IdempotencyRecord
+   * for 30 days (signed document links, money): store only `ref(answer)` --
+   * ids and status, nothing else -- and on a replay rebuild the answer with
+   * `reread`, from current data, firing no effects. Errors are stored as
+   * usual (a code and a message).
+   */
+  replay?: ReplayOptions;
+}
+
+/** What a replay-by-reference route stores: ids and status only. */
+export type ReplayRef = Record<string, string | number | boolean | null>;
+
+export interface ReplayOptions {
+  ref: (answer: never) => ReplayRef;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the route's own context; checked where it is declared
+  reread: (ctx: AuthedContext<any, any>, ref: ReplayRef) => Promise<HandlerResult<unknown>>;
+}
+
+const REPLAY_REF = "$replayRef";
+
+function storedRef(body: unknown): ReplayRef | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const ref = (body as Record<string, unknown>)[REPLAY_REF];
+  return ref && typeof ref === "object" && !Array.isArray(ref) ? (ref as ReplayRef) : null;
 }
 
 type Infer<T> = T extends z.ZodType ? z.output<T> : undefined;
@@ -468,6 +493,15 @@ export function v1Route<
           email: person.email,
         };
 
+        // Built after validation, so it carries the parsed body and query.
+        const ctx: AuthedContext<unknown, unknown> = {
+          ...base,
+          org,
+          actor,
+          session: { id: sessionRow.id, token: session.session.token, createdAt: sessionRow.createdAt },
+          idempotencyKey: null,
+        };
+
         // 13. Idempotency.
         let idempotencyKey: string | null = null;
         let recordId: string | null = null;
@@ -481,6 +515,7 @@ export function v1Route<
             throw E.badRequest("The Idempotency-Key must be the event's clientEventId.", "IDEMPOTENCY_KEY_MISMATCH");
           }
           idempotencyKey = key;
+          ctx.idempotencyKey = key;
           const claim = await claimKey({
             userId: person.id,
             key,
@@ -490,6 +525,16 @@ export function v1Route<
           });
           if (claim.kind === "replay") {
             log.replay = true;
+            const ref = options.replay && claim.statusCode < 400 ? storedRef(claim.body) : null;
+            if (ref && options.replay) {
+              // Rebuilt from current data; nothing stored again, no effects.
+              const again = await options.replay.reread(ctx, ref);
+              if (!again.ok) return finish(errorResponse(failureToError(again), requestId));
+              checkContract(again.value, requestId, options.response);
+              return finish(
+                jsonResponse(claim.statusCode, again.value, requestId, { "Idempotent-Replayed": "true" }),
+              );
+            }
             return finish(
               jsonResponse(claim.statusCode, claim.body, requestId, { "Idempotent-Replayed": "true" }),
             );
@@ -505,20 +550,11 @@ export function v1Route<
           throw e;
         }
 
-        // Built after validation, so it carries the parsed body and query.
-        const ctx: AuthedContext<unknown, unknown> = {
-          ...base,
-          org,
-          actor,
-          session: { id: sessionRow.id, token: session.session.token, createdAt: sessionRow.createdAt },
-          idempotencyKey,
-        };
-
         // 14. The handler.
         let res: Response;
         try {
           const result = await handler(ctx as ContextFor<A, H, Infer<B>, Infer<Q>>);
-          res = await respond(result, requestId, org, recordId, options.response);
+          res = await respond(result, requestId, org, recordId, options.response, options.replay);
         } catch (e) {
           if (recordId) {
             // A refusal the handler meant is final and stored; anything else
@@ -547,6 +583,21 @@ export function v1Route<
   };
 }
 
+/** The answer against its contract, in development and tests (validateResponses). */
+function checkContract(value: unknown, requestId: string, responseSchema: z.ZodType | undefined): void {
+  if (!responseSchema || !validateResponses) return;
+  const check = responseSchema.safeParse(value);
+  if (check.success) return;
+  console.error(
+    JSON.stringify({
+      at: "v1.contract",
+      requestId,
+      issues: check.error.issues.map((i) => ({ path: i.path.join("."), code: i.code, message: i.message })),
+    }),
+  );
+  throw new V1Error(500, "CONTRACT_VIOLATION", "Something went wrong on our side. Try again in a moment.", true);
+}
+
 /**
  * Turn a handler's result into the response, store it against the idempotency
  * key, and schedule its effects.
@@ -557,6 +608,7 @@ async function respond<T>(
   org: OrgContext | null,
   recordId: string | null,
   responseSchema: z.ZodType | undefined,
+  replay?: ReplayOptions,
 ): Promise<Response> {
   if (!result.ok) {
     const err = failureToError(result);
@@ -568,22 +620,20 @@ async function respond<T>(
   }
 
   const status = ("status" in result && result.status) || 200;
-  if (responseSchema && validateResponses) {
-    const check = responseSchema.safeParse(result.value);
-    if (!check.success) {
-      console.error(
-        JSON.stringify({
-          at: "v1.contract",
-          requestId,
-          issues: check.error.issues.map((i) => ({ path: i.path.join("."), code: i.code, message: i.message })),
-        }),
-      );
-      if (recordId) await releaseKey(recordId);
-      throw new V1Error(500, "CONTRACT_VIOLATION", "Something went wrong on our side. Try again in a moment.", true);
-    }
+  try {
+    checkContract(result.value, requestId, responseSchema);
+  } catch (e) {
+    if (recordId) await releaseKey(recordId);
+    throw e;
   }
 
-  if (recordId) await completeKey(recordId, status, result.value);
+  if (recordId) {
+    await completeKey(
+      recordId,
+      status,
+      replay ? { [REPLAY_REF]: replay.ref(result.value as never) } : result.value,
+    );
+  }
 
   const effects = result.effects ?? [];
   if (effects.length > 0) after(() => flushEffects(org, effects));

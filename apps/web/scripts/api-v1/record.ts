@@ -390,6 +390,15 @@ export async function recordChecks(t: RecordHarness): Promise<void> {
     check("sign: a COMPLETE access row", complete === 1, complete);
     const again = await post(`/api/v1/documents/${dText.id}/sign`, cookie, body, { headers: { "User-Agent": ua } });
     check("sign: a replay answers the stored result", again.status === 200 && again.headers["idempotent-replayed"] === "true" && again.body?.status === "SIGNED", again.body);
+    const stored = await db.idempotencyRecord.findFirst({ where: { key: id }, select: { responseBody: true } });
+    check(
+      "sign: the idempotency record keeps only the document's id, no links",
+      JSON.stringify(stored?.responseBody) === JSON.stringify({ $replayRef: { documentId: dText.id } }),
+      stored?.responseBody,
+    );
+    const same = (b: { id?: unknown; status?: unknown; signedAt?: unknown; contentSha256?: unknown; version?: unknown } | undefined) =>
+      JSON.stringify([b?.id, b?.status, b?.signedAt, b?.contentSha256, b?.version]);
+    check("sign: ...and the replay is rebuilt from the document, matching the answer", same(again.body) === same(ok.body), { again: again.body, ok: ok.body });
     const twice = await sign(dText.id, {});
     check("sign: signing again is 409 ALREADY_SIGNED", twice.status === 409 && twice.body?.error?.code === "ALREADY_SIGNED", twice.body);
     const revoked = await sign(dRevoked.id, { contentSha256: sha256("x") });

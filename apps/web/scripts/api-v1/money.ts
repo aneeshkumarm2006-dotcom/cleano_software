@@ -719,6 +719,12 @@ async function main() {
         replay.status === 200 && replay.headers["idempotent-replayed"] === "true" && sameJson(replay.body, ok.body) && rows === 3 && alertsAfter === alerts,
         { status: replay.status, rows, alertsAfter },
       );
+      const stored = await db.idempotencyRecord.findFirst({ where: { userId: F.users.cleaner.id, key }, select: { responseBody: true } });
+      check(
+        "withdraw: the idempotency record keeps only the withdrawal's id, not the answer",
+        JSON.stringify(stored?.responseBody) === JSON.stringify({ $replayRef: { withdrawalId: ok.body?.withdrawal?.id } }),
+        stored?.responseBody,
+      );
       const reuse = await post("/api/v1/pay/withdrawals", cleaner, { amountCents: 2500, expectedFeeBasisPoints: 500, clientEventId: key });
       check("withdraw: the same key with a different amount is 422", reuse.status === 422, reuse.body);
 
