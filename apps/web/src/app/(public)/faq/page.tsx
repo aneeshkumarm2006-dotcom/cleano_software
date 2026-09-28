@@ -1,12 +1,13 @@
 import { getPublishedFaqs, type FaqLang } from "@/lib/faq";
 import FaqAccordion from "@/components/FaqAccordion";
+import { workspaceName } from "@/lib/workspace-name";
 
 // Content is admin-editable, so render per request (not frozen at build).
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "FAQ",
-  description: "Frequently asked questions about Cleano cleaning services.",
+  description: "Frequently asked questions about our cleaning services.",
 };
 
 export default async function FaqPage({
@@ -14,6 +15,7 @@ export default async function FaqPage({
 }: {
   searchParams: Promise<{ lang?: string }>;
 }) {
+  const brandName = await workspaceName();
   // The app has no locale routing, so French lives on a query parameter and a
   // switch. Anything that isn't "fr" is English — an unknown value must not
   // produce a third, empty language.
@@ -41,7 +43,7 @@ export default async function FaqPage({
               color: "var(--primary)",
               fontWeight: 700,
             }}>
-            Cleano
+            {brandName}
           </div>
           <h1
             style={{

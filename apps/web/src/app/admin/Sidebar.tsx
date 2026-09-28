@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import type { UnreadChatCount } from "@/lib/chatUnread";
 import ScrollReset from "@/components/ScrollReset";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 import { useJobChatUnread } from "@/components/JobChatUnread";
 import { useAdminAttentionCounts } from "@/components/AdminAttentionCounts";
 
@@ -529,6 +530,7 @@ export default function Sidebar({
   const collapsedRef = useRef<Record<string, boolean>>(collapsedSections);
   const pathname = usePathname();
   const router = useRouter();
+  const brandName = useWorkspaceName();
   const [chatUnread, setChatUnread] = useState(0);
   // Job chat (cleaner ↔ client) unread, shared with any list on the page.
   const { total: jobChatUnread } = useJobChatUnread("admin");
@@ -804,7 +806,9 @@ export default function Sidebar({
             <span className="logo-mark-dark">
               <Sparkles size={16} strokeWidth={2} />
             </span>
-            <span className="logo-word">cleano</span>
+            <span className="logo-word" title={brandName}>
+              {brandName}
+            </span>
             <span className="logo-badge">Admin</span>
           </Link>
           {mobileOpen && (

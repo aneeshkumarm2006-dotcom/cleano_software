@@ -7,6 +7,7 @@ import {
   normalizeQuotePageConfig,
 } from "@/lib/quote-page-config";
 import QuoteFormClient from "./QuoteFormClient";
+import { workspaceName } from "@/lib/workspace-name";
 
 /**
  * Reads the admin-editable page config on every render rather than at build
@@ -19,7 +20,7 @@ async function loadQuotePage() {
   const [config, catalog, brandName] = await Promise.all([
     getSetting(QUOTE_PAGE_CONFIG_KEY),
     getServiceCatalog(),
-    getSetting("general.businessName"),
+    workspaceName(),
   ]);
   return {
     // `getSetting` already validates through the registry; normalizing again is

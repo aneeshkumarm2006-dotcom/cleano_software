@@ -2,6 +2,7 @@
 
 import { Download, Share, CheckCircle2, Smartphone } from "lucide-react";
 import { useInstall } from "./InstallContext";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 /**
  * Always-visible "Install app" card for Settings / login pages.
@@ -21,6 +22,7 @@ export default function InstallAppCard({
 }: {
   compact?: boolean;
 }) {
+  const brandName = useWorkspaceName();
   const { canInstall, isStandalone, isIOSSafari, install } = useInstall();
 
   if (isStandalone) {
@@ -32,7 +34,7 @@ export default function InstallAppCard({
         </span>
         <div className="cl-installcard-body">
           <strong>App installed</strong>
-          <span>You&apos;re using the installed Cleano app.</span>
+          <span>You&apos;re using the installed {brandName} app.</span>
         </div>
       </div>
     );
@@ -52,9 +54,9 @@ export default function InstallAppCard({
         {canInstall ? <Download size={18} /> : iosSteps ? <Share size={18} /> : <Smartphone size={18} />}
       </span>
       <div className="cl-installcard-body">
-        <strong>Install the Cleano app</strong>
+        <strong>Install the {brandName} app</strong>
         {canInstall ? (
-          <span>Add Cleano to your device for faster access and notifications.</span>
+          <span>Add {brandName} to your device for faster access and notifications.</span>
         ) : iosSteps ? (
           <span>
             In Safari: tap <strong>Share</strong> <Share size={12} style={{ verticalAlign: "-1px" }} /> →{" "}
@@ -69,7 +71,7 @@ export default function InstallAppCard({
         ) : (
           <span>
             Open this page in Chrome (Android/desktop) or Safari (iPhone/iPad) to
-            add Cleano to your device.
+            add {brandName} to your device.
           </span>
         )}
       </div>

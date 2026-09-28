@@ -1,6 +1,7 @@
 "use client";
 
 import { taxLines } from "@/lib/tax";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 interface LineItem {
   id: string;
@@ -39,6 +40,7 @@ interface InvoicePreviewProps {
   /**
    * The company's own name. "Cleano" was hardcoded here and in the PDF, so a
    * second workspace's invoices went out headed with another company's brand.
+   * Omitted, it is the workspace's name from the root layout.
    */
   businessName?: string;
   taxConfig: {
@@ -54,6 +56,7 @@ export default function InvoicePreview({
   taxConfig,
   businessName,
 }: InvoicePreviewProps) {
+  const brandName = useWorkspaceName();
   return (
     <div className="bg-white rounded-2xl border border-[var(--primary)]/10 overflow-hidden print:border-0 print:rounded-none">
       {/* Header */}
@@ -65,7 +68,7 @@ export default function InvoicePreview({
           </div>
           <div className="text-right">
             <h2 className="text-xl font-[300] tracking-tight">
-              {businessName?.trim() || "Cleano"}
+              {businessName?.trim() || brandName}
             </h2>
             <p className="text-white/70 text-xs mt-1">Professional Cleaning Services</p>
             {taxConfig.gstNumber && (

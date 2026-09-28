@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { workspaceName } from "@/lib/workspace-name";
+
+// See src/app/manifest.ts: per host, and never baked at build time.
+export const dynamic = "force-dynamic";
 
 /**
  * Separate PWA manifest for the CREW app.
@@ -12,11 +16,12 @@ import { NextResponse } from "next/server";
  * shortcut opens the crew route directly. Logged out, /cleaners/* redirects to
  * /cleanos/login (the crew door), which is the correct login for that user.
  */
-export function GET() {
+export async function GET() {
+  const name = `${await workspaceName()} Crew`;
   return NextResponse.json(
     {
-      name: "Cleano Crew",
-      short_name: "Cleano Crew",
+      name,
+      short_name: name,
       description: "Your jobs, schedule, pay, and inventory.",
       // Deep-link straight into the crew app instead of the shared root.
       start_url: "/cleaners/my-jobs",

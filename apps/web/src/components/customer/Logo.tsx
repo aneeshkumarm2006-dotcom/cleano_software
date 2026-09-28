@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 export default function CustomerLogo({
   onDark,
@@ -10,6 +11,8 @@ export default function CustomerLogo({
   onDark?: boolean;
   href?: string;
 }) {
+  // This company's name, not the platform's and not another tenant's.
+  const brandName = useWorkspaceName();
   return (
     <Link
       href={href}
@@ -17,7 +20,7 @@ export default function CustomerLogo({
       <span className="cl-logo-mark">
         <Sparkles size={18} strokeWidth={1.8} />
       </span>
-      <span>cleano</span>
+      <span>{brandName}</span>
     </Link>
   );
 }

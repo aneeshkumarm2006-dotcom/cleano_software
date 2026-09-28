@@ -10,6 +10,7 @@ import {
   APPLICANT_DOCUMENT_ACCEPT,
   validateApplicantDocument,
 } from "@/lib/employee-files";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 type Status =
   | "NEW"
@@ -53,6 +54,7 @@ export default function ApplicantPortalClient({
   documents: { id: string; fileName: string; uploadedAt: string }[];
   messages: { id: string; authorRole: string; body: string; createdAt: string }[];
 }) {
+  const brandName = useWorkspaceName();
   const router = useRouter();
   const firstName = name.split(/\s+/)[0] || name;
 
@@ -147,7 +149,7 @@ export default function ApplicantPortalClient({
             {isOffPath ? (
               <Banner kind={status === "ARCHIVED" ? "amber" : "error"}>
                 {status === "REJECTED"
-                  ? "We've decided not to move forward with your application at this time. Thank you for your interest in Cleano."
+                  ? `We've decided not to move forward with your application at this time. Thank you for your interest in ${brandName}.`
                   : "This application has been archived."}
               </Banner>
             ) : (
@@ -366,7 +368,7 @@ export default function ApplicantPortalClient({
                           marginTop: 4,
                           textAlign: fromApplicant ? "right" : "left",
                         }}>
-                        {fromApplicant ? "You" : "Cleano team"} · {fmtDate(m.createdAt)}
+                        {fromApplicant ? "You" : `${brandName} team`} · {fmtDate(m.createdAt)}
                       </div>
                     </div>
                   );

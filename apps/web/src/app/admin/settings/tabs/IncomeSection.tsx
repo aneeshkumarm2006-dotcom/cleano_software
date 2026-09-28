@@ -6,6 +6,7 @@ import { getIncomeData } from "../../actions/getIncomeData";
 import type { IncomeData } from "../../actions/getIncomeData.types";
 import { generateTaxSummary } from "../../actions/generateTaxSummary";
 import { SectionCard } from "./_shared";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 function formatCurrency(n: number) {
   return n.toLocaleString(undefined, {
@@ -29,6 +30,7 @@ interface IncomeSectionProps {
 }
 
 export default function IncomeSection({ employeeId }: IncomeSectionProps) {
+  const brandName = useWorkspaceName();
   const [data, setData] = useState<IncomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +149,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
                 </Text>
               </View>
               <View>
-                <Text style={{ fontSize: 14, color: "var(--primary)" }}>Cleano</Text>
+                <Text style={{ fontSize: 14, color: "var(--primary)" }}>{brandName}</Text>
                 <Text style={styles.meta}>Annual Income Statement</Text>
               </View>
             </View>
@@ -267,7 +269,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
     { label: "Paid out", value: formatCurrency(data.netYTD), show: true },
     { label: "Gross", value: formatCurrency(data.grossYTD), show: data.grossYTD > 0 },
     { label: "Estimated taxes", value: formatCurrency(data.estimatedTaxes), tone: "amber", show: data.estimatedTaxes > 0 },
-    { label: "Cleano deductions", value: formatCurrency(data.deductionsYTD), tone: "red", show: data.deductionsYTD !== 0 },
+    { label: `${brandName} deductions`, value: formatCurrency(data.deductionsYTD), tone: "red", show: data.deductionsYTD !== 0 },
     { label: "Adjustments", value: formatCurrency(data.adjustmentsYTD), tone: "blue", show: data.adjustmentsYTD !== 0 },
     { label: "Reimbursements", value: formatCurrency(data.reimbursementsYTD), show: data.reimbursementsYTD !== 0 },
     { label: "Hours worked", value: `${data.totalHoursYTD.toFixed(1)}h`, show: data.totalHoursYTD > 0 },

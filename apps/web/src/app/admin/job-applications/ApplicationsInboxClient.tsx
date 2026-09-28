@@ -35,6 +35,7 @@ import { postAdminMessageToApplicant } from "../actions/postAdminMessageToApplic
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 type Status =
   | "NEW"
@@ -226,6 +227,7 @@ export default function ApplicationsInboxClient({
   applications: Application[];
   archived?: boolean;
 }) {
+  const brandName = useWorkspaceName();
   const router = useRouter();
   const [filter, setFilter] = useState<"ALL" | Status>("ALL");
   const [selId, setSelId] = useState<string | null>(
@@ -645,7 +647,7 @@ export default function ApplicationsInboxClient({
                 v={sel.experienceTypes.length ? sel.experienceTypes.join(", ") : null}
               />
               <Row icon={<Briefcase size={15} />} k="Experience" v={sel.experience} />
-              <Row icon={<Heart size={15} />} k="Why Cleano" v={sel.whyCleano} />
+              <Row icon={<Heart size={15} />} k={`Why ${brandName}`} v={sel.whyCleano} />
               <Row
                 icon={<ShieldCheck size={15} />}
                 k="Criminal conviction"

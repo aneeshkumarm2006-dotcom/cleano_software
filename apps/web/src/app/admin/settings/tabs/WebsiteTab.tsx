@@ -10,6 +10,7 @@ import { SectionCard, Field, Feedback, Msg } from "./_shared";
 import { SETTINGS } from "@/lib/settings/registry";
 import FaqManager from "./FaqManager";
 import FaqAnalyticsPanel from "./FaqAnalyticsPanel";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 const DOMAIN = SETTINGS["website.customDomain"];
 
@@ -88,6 +89,7 @@ export default function WebsiteTab({ settings }: Props) {
 
 /** Read-only copy-paste iframe snippets for the public forms/pages. */
 function EmbedCodes({ domain }: { domain: string }) {
+  const brandName = useWorkspaceName();
   const base = domain.trim() ? `https://${domain.trim()}` : "https://your-domain.com";
   const embeds: { label: string; path: string }[] = [
     { label: "Booking form", path: "/book" },
@@ -106,7 +108,7 @@ function EmbedCodes({ domain }: { domain: string }) {
     <div style={{ marginTop: 24, borderTop: "1px solid var(--primary-10)", paddingTop: 16 }}>
       <span style={{ fontSize: 13, fontWeight: 600 }}>Embed codes</span>
       <p style={{ fontSize: 12, color: "var(--primary-60)", margin: "4px 0 12px" }}>
-        Paste these into your website to embed a Cleano form. Set your domain
+        Paste these into your website to embed a {brandName} form. Set your domain
         above first.
       </p>
       <div className="space-y-3">

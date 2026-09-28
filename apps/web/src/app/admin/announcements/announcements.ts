@@ -15,6 +15,7 @@ import {
   revisedAt,
   toggleAnnouncementReaction,
 } from "@/server/announcements/announcements";
+import { workspaceName } from "@/lib/workspace-name";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -109,6 +110,8 @@ async function requireUser(): Promise<
 
 /** All announcements, pinned first then newest, with the caller's reaction. */
 export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
+  // An announcement with no named author is from the company, by name.
+  const teamName = `Team ${await workspaceName()}`;
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
@@ -154,7 +157,7 @@ export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
         title: an.title,
         body: an.body,
         pinned: an.pinned,
-        authorName: an.authorName ?? "Team Cleano",
+        authorName: an.authorName ?? teamName,
         createdAt: an.createdAt.toISOString(),
         reactions,
         myReaction,
@@ -230,6 +233,8 @@ export async function createAnnouncement(input: {
   body: string;
   pinned?: boolean;
 }): Promise<Result<AnnouncementDTO>> {
+  // An announcement with no named author is from the company, by name.
+  const teamName = `Team ${await workspaceName()}`;
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
   if (!isAdminRole(a.role)) return { success: false, error: "Not authorized" };
@@ -251,7 +256,7 @@ export async function createAnnouncement(input: {
       body,
       pinned: input.pinned === true,
       authorId: a.user.id,
-      authorName: a.user.name ?? "Team Cleano",
+      authorName: a.user.name ?? teamName,
     },
   });
   fireEffects([announcementPush(a.user.id)]);
@@ -263,7 +268,7 @@ export async function createAnnouncement(input: {
       title: created.title,
       body: created.body,
       pinned: created.pinned,
-      authorName: created.authorName ?? "Team Cleano",
+      authorName: created.authorName ?? teamName,
       createdAt: created.createdAt.toISOString(),
       reactions: {},
       myReaction: null,

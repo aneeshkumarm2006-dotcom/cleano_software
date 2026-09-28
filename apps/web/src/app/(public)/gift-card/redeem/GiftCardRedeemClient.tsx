@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { redeemGiftCard } from "../actions/redeemGiftCard";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 export default function GiftCardRedeemClient({
   initialCode,
 }: {
   initialCode: string;
 }) {
+  const brandName = useWorkspaceName();
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ amount: number; balance: number } | null>(null);
@@ -123,7 +125,7 @@ export default function GiftCardRedeemClient({
         {pending ? "Redeeming…" : "Redeem code"}
       </button>
       <p style={{ marginTop: 12, fontSize: 12, color: "#6b7d80", lineHeight: 1.5 }}>
-        Don't have a Cleano account yet?{" "}
+        Don't have a {brandName} account yet?{" "}
         <a href="/setup" style={{ color: "var(--primary)" }}>
           Create one
         </a>{" "}

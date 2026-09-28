@@ -4059,7 +4059,8 @@ body {
     background: rgba(255,255,255,0.10); color: #fff; cursor: pointer;
   }
   .cl-mobile-burger:active { background: rgba(255,255,255,0.18); }
-  .cl-mobile-title { font-size: 16px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+  /* The workspace's own name, so it can be long: ellipsis rather than wrap. */
+  .cl-mobile-title { font-size: 16px; font-weight: 600; color: #fff; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cl-mobile-spacer { flex: 1; }
   .cl-mobile-avatar {
     width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
@@ -4273,11 +4274,12 @@ html, body { overscroll-behavior-y: contain; }
   display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 16px rgba(0,0,0,0.20); flex-shrink: 0;
 }
-.cl-snav-wordmark { color: #fff; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+/* The workspace's own name, so it can be long: ellipsis rather than wrap. */
+.cl-snav-wordmark { color: #fff; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cl-snav-badge {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
   background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.70);
-  padding: 2px 8px; border-radius: 6px; margin-left: 6px;
+  padding: 2px 8px; border-radius: 6px; margin-left: 6px; flex-shrink: 0;
 }
 
 /* User card */
@@ -5740,9 +5742,10 @@ select.cl-field-input { background: #fff; }
   overflow-y: auto;
 }
 .asidebar-logo { display: flex; align-items: center; gap: 9px; padding: 0 6px 2px; }
-.asidebar-logo .logo-word { color: #fff; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
+/* The workspace's own name, so it can be long: ellipsis rather than wrap. */
+.asidebar-logo .logo-word { color: #fff; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asidebar-logo .logo-badge {
-  margin-left: 4px; padding: 2px 7px; border-radius: 6px;
+  margin-left: 4px; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;
   background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7);
   font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
 }

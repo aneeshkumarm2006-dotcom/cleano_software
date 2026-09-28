@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
 import { Field, PasswordInput, Button, Banner } from "@/components/customer/Field";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 function ResetPasswordInner() {
+  const brandName = useWorkspaceName();
   const searchParams = useSearchParams();
   // better-auth redirects the email link to ?token=… (or ?error=… if invalid).
   const token = searchParams.get("token");
@@ -64,7 +66,7 @@ function ResetPasswordInner() {
           <em>password.</em>
         </h1>
         <p className="cl-subtitle">
-          Pick a password you'll use to sign in to your Cleano portal.
+          Pick a password you'll use to sign in to your {brandName} portal.
         </p>
       </header>
 

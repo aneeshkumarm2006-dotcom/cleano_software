@@ -1,12 +1,13 @@
-import { getSetting } from "@/lib/settings";
+import { workspaceName } from "@/lib/workspace-name";
 
 export default async function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const businessName = await getSetting("general.businessName");
-  const initial = businessName.charAt(0).toUpperCase() || "C";
+  // The setting, else the Organization's own name (lib/workspace-name).
+  const businessName = await workspaceName();
+  const initial = businessName.charAt(0).toUpperCase();
 
   return (
     <div className="min-h-dvh bg-white">

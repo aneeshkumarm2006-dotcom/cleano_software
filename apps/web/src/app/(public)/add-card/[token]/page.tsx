@@ -1,5 +1,6 @@
 import { db } from "@/lib/org-db";
 import AddCardForm from "./AddCardForm";
+import { workspaceName } from "@/lib/workspace-name";
 
 export const metadata = {
   title: "Add a Card",
@@ -10,6 +11,7 @@ export default async function AddCardPage({
 }: {
   params: Promise<{ token: string }>;
 }) {
+  const brandName = await workspaceName();
   const { token } = await params;
 
   const row = await db.clientCardSetupToken.findUnique({
@@ -41,7 +43,7 @@ export default async function AddCardPage({
               color: "var(--primary)",
               fontWeight: 700,
             }}>
-            Cleano
+            {brandName}
           </div>
           <h1
             style={{
@@ -54,7 +56,7 @@ export default async function AddCardPage({
             Add a card
           </h1>
           <p style={{ marginTop: 12, fontSize: 14, color: "#3a5a62", lineHeight: 1.5 }}>
-            Add a card to your Cleano account. We'll save it securely with Stripe and charge it after your cleaning is complete.
+            Add a card to your {brandName} account. We'll save it securely with Stripe and charge it after your cleaning is complete.
           </p>
         </header>
 

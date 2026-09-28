@@ -38,6 +38,7 @@ import {
 import CustomerLogo from "@/components/customer/Logo";
 import { Button, Banner } from "@/components/customer/Field";
 import { authClient } from "@/lib/auth-client";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 const STEP_LABELS = [
   "Postal code",
@@ -75,6 +76,7 @@ interface StoredDraft {
 }
 
 export default function BookPage() {
+  const brandName = useWorkspaceName();
   const session = authClient.useSession();
   const loggedInUser = session.data?.session
     ? (session.data.user as { name?: string | null; email?: string | null; role?: string | null })
@@ -869,7 +871,7 @@ export default function BookPage() {
                 fontSize: 18,
                 letterSpacing: "-0.01em",
               }}>
-              cleano
+              {brandName}
             </span>
           </div>
 
@@ -1195,7 +1197,7 @@ export default function BookPage() {
                       lineHeight: 1.55,
                       color: "var(--ink-soft)",
                     }}>
-                    I agree to Cleano's <a className="cl-link">terms of service</a> and
+                    I agree to {brandName}&apos;s <a className="cl-link">terms of service</a> and
                     understand that prices may adjust after on-site assessment.
                   </span>
                 </label>

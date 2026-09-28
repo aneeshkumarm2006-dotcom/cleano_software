@@ -1,24 +1,26 @@
 import { db } from "@/lib/org-db";
 import { getSettings } from "@/lib/settings";
 import { CUSTOMER_RATED_BY } from "@bookmops/core/rating";
+import { workspaceName } from "@/lib/workspace-name";
 
 // Reviews + settings change at runtime, so render per request.
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Reviews",
-  description: "See what Cleano customers say about our cleaning services.",
+  description: "See what our customers say about our cleaning services.",
 };
 
 /** "John Smith" → "John S." — protects customer privacy on the public wall. */
-function shortName(name: string | null | undefined): string {
+function shortName(name: string | null | undefined, brandName: string): string {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "A Cleano customer";
+  if (parts.length === 0) return `A ${brandName} customer`;
   if (parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
 export default async function ReviewsPage() {
+  const brandName = await workspaceName();
   const { "customer.liveReviewsEnabled": enabled, "customer.liveReviewThreshold": threshold } =
     await getSettings([
       "customer.liveReviewsEnabled",
@@ -74,7 +76,7 @@ export default async function ReviewsPage() {
               color: "var(--primary)",
               fontWeight: 700,
             }}>
-            Cleano
+            {brandName}
           </div>
           <h1
             style={{
@@ -126,7 +128,7 @@ export default async function ReviewsPage() {
                   {r.notes}
                 </p>
                 <p style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>
-                  — {shortName(r.job?.client?.name)}
+                  — {shortName(r.job?.client?.name, brandName)}
                 </p>
               </div>
             ))}

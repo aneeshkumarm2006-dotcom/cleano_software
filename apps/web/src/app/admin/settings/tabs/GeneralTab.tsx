@@ -44,11 +44,17 @@ export default function GeneralTab({ settings }: Props) {
     const updates = [
       { key: CURRENCY.key, category: CURRENCY.category, value: currencyValue },
       { key: TIMEZONE.key, category: TIMEZONE.category, value: timezone },
-      {
-        key: BUSINESS_NAME.key,
-        category: BUSINESS_NAME.category,
-        value: businessName.trim(),
-      },
+      // Blank means "use the workspace's own name", which is the default, so
+      // there is nothing to save (and the setting rejects an empty string).
+      ...(businessName.trim()
+        ? [
+            {
+              key: BUSINESS_NAME.key,
+              category: BUSINESS_NAME.category,
+              value: businessName.trim(),
+            },
+          ]
+        : []),
       {
         key: BUSINESS_EMAIL.key,
         category: BUSINESS_EMAIL.category,
@@ -85,11 +91,12 @@ export default function GeneralTab({ settings }: Props) {
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
             className={themedInputClass}
-            placeholder="Cleano"
+            placeholder="Your company name"
           />
         </Field>
         <p style={{ fontSize: 12, color: "var(--primary-60)" }}>
-          Shown in the public website header and footer.
+          Shown across your workspace, invoices and emails. Leave blank to use
+          your workspace name.
         </p>
 
         <Field label={CURRENCY.label}>

@@ -11,6 +11,7 @@ import { getTaxRates } from "@/lib/tax.server";
 import { taxLines, type TaxLine } from "@/lib/tax";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
 import { formatAddressLine } from "@bookmops/core/property";
+import { workspaceName } from "@/lib/workspace-name";
 
 const BRAND = "#008C9C";
 
@@ -116,6 +117,7 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
 export async function buildReceiptPdfBuffer(
   data: ReceiptData
 ): Promise<Buffer> {
+  const brandName = await workspaceName();
   const { pdf, Document, Page, Text, View, StyleSheet } = await import(
     "@react-pdf/renderer"
   );
@@ -208,7 +210,7 @@ export async function buildReceiptPdfBuffer(
         React.createElement(
           View,
           null,
-          React.createElement(Text, { style: styles.brand }, "Cleano"),
+          React.createElement(Text, { style: styles.brand }, brandName),
           React.createElement(
             Text,
             { style: styles.subtitle },
@@ -372,7 +374,7 @@ export async function buildReceiptPdfBuffer(
       React.createElement(
         Text,
         { style: styles.footer },
-        "Thank you for choosing Cleano. Questions? hello@cleano.example"
+        `Thank you for choosing ${brandName}.`
       )
     )
   );

@@ -1,14 +1,16 @@
 import GiftCardPurchaseClient from "./GiftCardPurchaseClient";
 import { GIFT_CARD_COVERS, MIN_JOB_PRICE_USD } from "@/lib/gift-cards/covers";
 import { getSetting } from "@/lib/settings";
+import { workspaceName } from "@/lib/workspace-name";
 
 export const metadata = {
   title: "Buy a Gift Card",
   description:
-    "Send a Cleano cleaning service gift card to someone you appreciate.",
+    "Send a cleaning service gift card to someone you appreciate.",
 };
 
 export default async function GiftCardPurchasePage() {
+  const brandName = await workspaceName();
   const tiers = await getSetting("payments.giftCardTiers");
   return (
     <div
@@ -27,7 +29,7 @@ export default async function GiftCardPurchasePage() {
               color: "var(--primary)",
               fontWeight: 700,
             }}>
-            Cleano gift cards
+            {brandName} gift cards
           </div>
           <h1
             style={{
@@ -46,7 +48,7 @@ export default async function GiftCardPurchasePage() {
               color: "#3a5a62",
               lineHeight: 1.5,
             }}>
-            A Cleano gift card adds credit to the recipient's account and
+            A {brandName} gift card adds credit to the recipient's account and
             auto-applies the next time they book a cleaning. Our minimum
             job price is <strong>${MIN_JOB_PRICE_USD}</strong>, so pick a
             value that comfortably covers a service for them.

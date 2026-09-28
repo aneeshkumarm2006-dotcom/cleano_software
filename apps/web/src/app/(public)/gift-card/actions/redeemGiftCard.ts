@@ -38,7 +38,7 @@ export async function redeemGiftCard(input: { code: string }) {
   if (!client) {
     return {
       success: false,
-      error: "No Cleano customer profile found for this account.",
+      error: "No customer profile found for this account.",
     };
   }
 

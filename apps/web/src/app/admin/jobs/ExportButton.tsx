@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import DatePicker from "@/components/ui/DatePicker";
 import { exportJobs } from "../actions/exportJobs";
 import type { JobExportRow } from "../actions/exportJobs.types";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 interface ExportButtonProps {
   filters: {
@@ -35,7 +36,8 @@ function formatMoney(v: number | string) {
 
 async function buildJobsPdf(
   rows: JobExportRow[],
-  generatedAt: string
+  generatedAt: string,
+  brandName: string
 ): Promise<Blob> {
   const { pdf, Document, Page, Text, View, StyleSheet } = await import(
     "@react-pdf/renderer"
@@ -189,7 +191,7 @@ async function buildJobsPdf(
             </Text>
           </View>
           <View>
-            <Text style={styles.brand}>Cleano</Text>
+            <Text style={styles.brand}>{brandName}</Text>
             <Text style={styles.metaLine}>Generated {generatedAt}</Text>
           </View>
         </View>
@@ -293,7 +295,7 @@ async function buildJobsPdf(
         )}
 
         <View style={styles.footer} fixed>
-          <Text>Cleano — Jobs Export</Text>
+          <Text>{brandName} — Jobs Export</Text>
           <Text
             render={({ pageNumber, totalPages }) =>
               `Page ${pageNumber} of ${totalPages}`
@@ -308,6 +310,7 @@ async function buildJobsPdf(
 }
 
 export default function ExportButton({ filters }: ExportButtonProps) {
+  const brandName = useWorkspaceName();
   const [busy, setBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingFormat, setPendingFormat] = useState<"csv" | "pdf">("csv");
@@ -356,7 +359,7 @@ export default function ExportButton({ filters }: ExportButtonProps) {
         const blob = new Blob([result.content], { type: "text/csv" });
         triggerDownload(blob, result.filename);
       } else {
-        const blob = await buildJobsPdf(result.rows, result.generatedAt);
+        const blob = await buildJobsPdf(result.rows, result.generatedAt, brandName);
         triggerDownload(blob, result.filename);
       }
       setPickerOpen(false);

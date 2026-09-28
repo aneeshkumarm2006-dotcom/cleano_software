@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Home, CalendarClock, UserCircle, HelpCircle, LogOut, Sparkles, Menu, X } from "lucide-react";
 import ScrollReset from "@/components/ScrollReset";
 import { useJobChatUnread } from "@/components/JobChatUnread";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 interface PortalShellProps {
   user: { name: string; email: string };
@@ -19,6 +20,7 @@ export default function PortalShell({
   children,
 }: PortalShellProps) {
   const pathname = usePathname();
+  const brandName = useWorkspaceName();
   const [open, setOpen] = useState(false);
   // Unread messages from the cleaner/office on this customer's bookings.
   const { total: jobChatUnread } = useJobChatUnread("client");
@@ -58,7 +60,7 @@ export default function PortalShell({
           aria-label="Open menu">
           <Menu size={20} />
         </button>
-        <span className="cl-portal-topbar-title">cleano</span>
+        <span className="cl-portal-topbar-title">{brandName}</span>
         <span style={{ flex: 1 }} />
         <span className="cl-portal-topbar-avatar">{initials || "C"}</span>
       </header>
@@ -78,7 +80,7 @@ export default function PortalShell({
               style={{ background: "#fff", color: "var(--primary)" }}>
               <Sparkles size={18} strokeWidth={1.8} />
             </span>
-            <span>cleano</span>
+            <span className="cl-psidebar-name" title={brandName}>{brandName}</span>
             <button
               className="cl-portal-drawer-close"
               onClick={() => setOpen(false)}

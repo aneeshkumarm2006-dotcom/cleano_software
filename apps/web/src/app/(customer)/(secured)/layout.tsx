@@ -9,8 +9,10 @@ import PortalShell from "@/components/customer/PortalShell";
 import RatingPopup from "../RatingPopup";
 import { getPendingClientRating } from "../actions/ratingActions";
 
+// Just the area's own name: the root layout's title template appends the
+// workspace's, which is how every tenant's portal tab said "My Cleano".
 export const metadata = {
-  title: "My Cleano",
+  title: "My account",
 };
 
 export default async function PortalLayout({

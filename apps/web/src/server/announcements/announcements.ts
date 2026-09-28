@@ -14,6 +14,7 @@ import { db } from "@/lib/org-db";
 
 import type { Actor } from "../actor";
 import { failure, notFound, ok, type Result } from "../result";
+import { workspaceName } from "@/lib/workspace-name";
 
 // ── Vocabulary ──────────────────────────────────────────────────────────────
 
@@ -131,6 +132,8 @@ export async function listAnnouncementsFor(
   actor: Actor,
   cursorRaw: string | undefined,
 ): Promise<Result<AnnouncementsResponse>> {
+  // An announcement with no named author is from the company, by name.
+  const teamName = `Team ${await workspaceName()}`;
   if (!canParticipate(actor.role)) return failure(403, "FORBIDDEN", "Not authorized");
   const cursor = decodeCursor(cursorRaw);
   if (cursor === "invalid") return failure(400, "VALIDATION_FAILED", "That page link isn't valid. Refresh and try again.");
@@ -179,7 +182,7 @@ export async function listAnnouncementsFor(
       title: an.title,
       body: an.body,
       pinned: an.pinned,
-      authorName: an.authorName ?? "Team Cleano",
+      authorName: an.authorName ?? teamName,
       createdAt: an.createdAt.toISOString(),
       editedAt: rev ? rev.toISOString() : null,
       readByMe: !!myRead,

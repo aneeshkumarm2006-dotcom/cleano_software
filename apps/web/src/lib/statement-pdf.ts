@@ -4,6 +4,7 @@
  */
 
 import { formatDate } from "@/lib/timezone";
+import { workspaceName } from "@/lib/workspace-name";
 
 const BRAND = "#008C9C";
 
@@ -29,6 +30,7 @@ export interface StatementData {
 export async function buildStatementPdfBuffer(
   data: StatementData
 ): Promise<Buffer> {
+  const brandName = await workspaceName();
   const { pdf, Document, Page, Text, View, StyleSheet } = await import(
     "@react-pdf/renderer"
   );
@@ -117,7 +119,7 @@ export async function buildStatementPdfBuffer(
         el(
           View,
           null,
-          el(Text, { style: styles.brand }, "Cleano"),
+          el(Text, { style: styles.brand }, brandName),
           el(Text, { style: styles.subtitle }, "Monthly statement"),
         ),
         el(
@@ -199,7 +201,7 @@ export async function buildStatementPdfBuffer(
       el(
         Text,
         { style: styles.footer },
-        "Thank you for choosing Cleano. Questions about this statement? Reply to this email.",
+        `Thank you for choosing ${brandName}. Questions about this statement? Reply to this email.`,
       ),
     ),
   );

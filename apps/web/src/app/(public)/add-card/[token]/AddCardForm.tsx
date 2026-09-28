@@ -10,6 +10,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { createSetupIntentForToken } from "./actions/createSetupIntent";
 import { finalizeCardSetup } from "./actions/finalizeCardSetup";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 export default function AddCardForm({ token }: { token: string }) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -100,6 +101,7 @@ function Inner({
   setupIntentId: string;
   customerName: string;
 }) {
+  const brandName = useWorkspaceName();
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
@@ -182,7 +184,7 @@ function Inner({
         {busy ? "Saving…" : "Save card"}
       </button>
       <p style={{ marginTop: 12, fontSize: 11, color: "#6b7d80", textAlign: "center" }}>
-        Card details are processed by Stripe. Cleano never sees your full card number.
+        Card details are processed by Stripe. {brandName} never sees your full card number.
       </p>
     </div>
   );

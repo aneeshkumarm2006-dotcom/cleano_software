@@ -12,6 +12,7 @@ import { taxRegistrationNumber } from "@/lib/tax";
 import { getSetting } from "@/lib/settings";
 import { getCurrentOrg } from "@/lib/org";
 import { orgFromContext } from "@/lib/org-context";
+import { PLATFORM_NAME } from "@/lib/workspace-name";
 
 const BRAND = "#008C9C";
 
@@ -211,7 +212,7 @@ export async function loadInvoiceData(
       name:
         (typeof businessName === "string" && businessName.trim()) ||
         orgName ||
-        "Cleano",
+        PLATFORM_NAME,
       tagline: "Professional Cleaning Services",
       gstNumber,
       qstNumber,

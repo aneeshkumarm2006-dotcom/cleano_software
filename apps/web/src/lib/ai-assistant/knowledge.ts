@@ -26,6 +26,7 @@ import {
   type AiAssistantConfig,
 } from "./config";
 import { buildAvailabilitySummary } from "./availability";
+import { workspaceName } from "@/lib/workspace-name";
 
 export interface WorkspaceKnowledge {
   config: AiAssistantConfig;
@@ -53,7 +54,7 @@ export async function buildWorkspaceKnowledge(): Promise<WorkspaceKnowledge> {
   const [config, businessName, businessPhone, businessEmail, timezone] =
     await Promise.all([
       getAiAssistantConfig(),
-      getSetting("general.businessName"),
+      workspaceName(),
       getSetting("general.businessPhone"),
       getSetting("general.businessEmail"),
       getSetting("general.timezone"),

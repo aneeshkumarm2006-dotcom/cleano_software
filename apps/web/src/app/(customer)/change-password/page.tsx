@@ -6,8 +6,10 @@ import { authClient } from "@/lib/auth-client";
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
 import { Field, PasswordInput, Button, Banner } from "@/components/customer/Field";
 import { setNewPassword } from "../actions/setNewPassword";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 function ChangePasswordForm() {
+  const brandName = useWorkspaceName();
   const router = useRouter();
   const session = authClient.useSession();
 
@@ -53,7 +55,7 @@ function ChangePasswordForm() {
       badge="Set your password">
       <header style={{ marginBottom: 36 }}>
         <p className="cl-eyebrow" style={{ marginBottom: 12 }}>
-          Welcome to Cleano
+          Welcome to {brandName}
         </p>
         <h1 className="cl-display">
           Set your

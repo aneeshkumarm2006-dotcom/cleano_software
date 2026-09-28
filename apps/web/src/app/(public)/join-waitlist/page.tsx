@@ -5,6 +5,7 @@ import { joinWaitlist } from "../actions/joinWaitlist";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import DatePicker from "@/components/ui/DatePicker";
 import { storeDateKey } from "@/lib/timezone";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 const SERVICE_TYPES = [
   { value: "standard", label: "Standard Clean" },
@@ -38,6 +39,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export default function JoinWaitlistPage() {
+  const brandName = useWorkspaceName();
   const [isPending, startTransition] = useTransition();
   const [success, setSuccess] = useState(false);
   const [successData, setSuccessData] = useState<{ name?: string; email?: string; date?: string } | null>(null);
@@ -127,7 +129,7 @@ export default function JoinWaitlistPage() {
         padding: "20px 32px", maxWidth: 760, margin: "0 auto",
       }}>
         <a href="/" style={{ fontFamily: "var(--font-app)", fontSize: 20, fontWeight: 400, color: "var(--primary)", textDecoration: "none", letterSpacing: "-0.01em" }}>
-          Cleano
+          {brandName}
         </a>
         <a href="/book" style={{ fontSize: 13, color: "var(--primary)", textDecoration: "none", fontWeight: 600, opacity: 0.7 }}>
           Book a cleaning →

@@ -1,4 +1,5 @@
 import GiftCardRedeemClient from "./GiftCardRedeemClient";
+import { workspaceName } from "@/lib/workspace-name";
 
 export const metadata = {
   title: "Redeem a Gift Card",
@@ -9,6 +10,7 @@ export default async function GiftCardRedeemPage({
 }: {
   searchParams: Promise<{ code?: string }>;
 }) {
+  const brandName = await workspaceName();
   const params = await searchParams;
   return (
     <div
@@ -27,7 +29,7 @@ export default async function GiftCardRedeemPage({
               color: "var(--primary)",
               fontWeight: 700,
             }}>
-            Cleano gift cards
+            {brandName} gift cards
           </div>
           <h1
             style={{
@@ -40,7 +42,7 @@ export default async function GiftCardRedeemPage({
             Redeem your code
           </h1>
           <p style={{ marginTop: 12, fontSize: 14, color: "#3a5a62", lineHeight: 1.5 }}>
-            Sign in to your Cleano customer account, paste the gift card code,
+            Sign in to your {brandName} customer account, paste the gift card code,
             and we'll add the credit to your account. It will auto-apply the
             next time you book.
           </p>

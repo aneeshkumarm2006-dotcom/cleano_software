@@ -15,6 +15,7 @@ import { ChoiceButton, NumberStepper } from "@/components/customer/atoms";
 import DatePicker from "@/components/ui/DatePicker";
 import { submitJobApplication } from "./actions/submitJobApplication";
 import { uploadResume } from "./actions/uploadResume";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 /* ------------------------------------------------------------------ */
 /* Option sets — value stored in DB, en/fr labels shown to applicant   */
@@ -149,6 +150,7 @@ const initialForm = {
 };
 
 export default function CareersFormClient() {
+  const brandName = useWorkspaceName();
   const [form, setForm] = useState(initialForm);
   const [consentDate, setConsentDate] = useState(todayISO());
   const [step, setStep] = useState(0);
@@ -289,7 +291,7 @@ export default function CareersFormClient() {
                 fontWeight: 600,
                 margin: 0,
               }}>
-              Cleano Careers · Carrières
+              {brandName} Careers · Carrières
             </p>
             <h1
               style={{
@@ -337,7 +339,7 @@ export default function CareersFormClient() {
                 color: "rgba(255,255,255,0.6)",
                 fontWeight: 600,
               }}>
-              Why Cleano · Pourquoi Cleano
+              Why {brandName} · Pourquoi {brandName}
             </span>
             {[
               { icon: <Wallet size={15} />, t: "Competitive pay" },
@@ -377,7 +379,7 @@ export default function CareersFormClient() {
         <main className="cl-book-main">
           <header className="cl-book-header cl-careers-header">
             <CustomerLogo href="/" />
-            <span className="cl-careers-tagline">Join the Cleano team</span>
+            <span className="cl-careers-tagline">Join the {brandName} team</span>
             {!done ? (
               <span className="cl-careers-mstep">
                 Step {step + 1} / {STEPS.length}
@@ -489,7 +491,7 @@ export default function CareersFormClient() {
                       textAlign: "center",
                     }}>
                     By applying you agree to be contacted about employment
-                    opportunities at Cleano. · En postulant, vous acceptez d&apos;être
+                    opportunities at {brandName}. · En postulant, vous acceptez d&apos;être
                     contacté(e).
                   </p>
                 ) : null}
@@ -770,7 +772,7 @@ export default function CareersFormClient() {
       case 5:
         return (
           <>
-            <Field label="Why do you want to work with Cleano? · Pourquoi Cleano ?" htmlFor="why">
+            <Field label={`Why do you want to work with ${brandName}? · Pourquoi ${brandName} ?`} htmlFor="why">
               <Textarea
                 id="why"
                 rows={3}

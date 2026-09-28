@@ -1,6 +1,7 @@
 "use client";
 
 import { LogOut, Sparkles } from "lucide-react";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 interface ApplicantShellProps {
   user: { name: string; email: string };
@@ -18,6 +19,7 @@ export default function ApplicantShell({
   signOutAction,
   children,
 }: ApplicantShellProps) {
+  const brandName = useWorkspaceName();
   const firstName = user.name.split(/\s+/)[0] || user.name;
 
   return (
@@ -40,7 +42,7 @@ export default function ApplicantShell({
           <Sparkles size={16} strokeWidth={1.8} />
         </span>
         <span className="cl-portal-topbar-title" style={{ marginLeft: 8 }}>
-          cleano
+          {brandName}
         </span>
         <span style={{ flex: 1 }} />
         <span

@@ -9,6 +9,7 @@ import { STORE_TZ } from "@/lib/timezone";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import MetaPixel from "@/components/MetaPixel";
+import { WorkspaceNameProvider } from "@/components/WorkspaceName";
 
 /**
  * The one family, everywhere (CLN-P1-8-02/03/09).
@@ -143,6 +144,11 @@ export default async function RootLayout({
   const rawTz = org?.timezone ?? STORE_TZ;
   const pageTz = /^[A-Za-z0-9_+\-/]{1,64}$/.test(rawTz) ? rawTz : STORE_TZ;
 
+  // The name every workspace screen shows in its own header. Client
+  // components read it through useWorkspaceName(); the same function titles
+  // the browser tab above, so the two can never disagree.
+  const brandName = await workspaceName();
+
   return (
     <html lang="en" className={montserrat.variable}>
       <head>
@@ -167,7 +173,7 @@ export default async function RootLayout({
           could coexist without anyone noticing. */}
       <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />
-        {children}
+        <WorkspaceNameProvider name={brandName}>{children}</WorkspaceNameProvider>
         <MetaPixel />
       </body>
     </html>

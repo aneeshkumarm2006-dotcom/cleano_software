@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
+import { workspaceName } from "@/lib/workspace-name";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
@@ -36,8 +37,10 @@ const FROM = process.env.EMAIL_FROM ?? "Cleano <no-reply@cleano.ca>";
  */
 async function tenantFrom(): Promise<{ from: string; replyTo?: string }> {
   try {
+    // workspaceName(): the business-name setting, else the Organization's
+    // own name — the same name the workspace's screens and invoices show.
     const [name, replyTo] = await Promise.all([
-      getSetting("general.businessName"),
+      workspaceName(),
       getSetting("general.businessEmail"),
     ]);
     // Keep only the address part of EMAIL_FROM; the display name is theirs.

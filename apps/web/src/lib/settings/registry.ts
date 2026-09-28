@@ -609,13 +609,19 @@ export const SETTINGS = {
     validate: timezone(),
     audit: true,
   }),
-  // Public-facing business name. Shown in the marketing site header/footer.
-  // Default = the brand name currently hardcoded there.
+  // Public-facing business name: every workspace header, the browser tab,
+  // invoices and email "From" names.
+  //
+  // Default is EMPTY, not a brand. It was "Cleano" — one tenant's name — so a
+  // workspace that never typed its own was branded as that tenant everywhere,
+  // and the Organization-name fallback in workspaceName() could never be
+  // reached. Read it through `workspaceName()` (lib/workspace-name.ts), which
+  // falls back to the Organization's name when this is blank.
   "general.businessName": def({
     key: "general.businessName",
     category: "general",
     label: "Business name",
-    default: "Cleano",
+    default: "",
     validate: text(80),
     audit: true,
   }),

@@ -8,6 +8,7 @@ import {
   normalizeQuotePageConfig,
 } from "@/lib/quote-page-config";
 import QuotesInboxClient from "./QuotesInboxClient";
+import { workspaceName } from "@/lib/workspace-name";
 
 export default async function QuotesPage({
   searchParams,
@@ -32,7 +33,7 @@ export default async function QuotesPage({
       }),
       getServiceCatalogWithLabels(),
       getSetting(QUOTE_PAGE_CONFIG_KEY),
-      getSetting("general.businessName"),
+      workspaceName(),
     ]);
 
   return (

@@ -62,7 +62,7 @@ const preview = read("src/app/admin/invoices/InvoicePreview.tsx");
 check("preview accepts a business name", /businessName\?: string;/.test(preview));
 check(
   "preview renders the passed name",
-  preview.includes('businessName?.trim() || "Cleano"'),
+  preview.includes("businessName?.trim() || brandName"),
 );
 
 const detail = read("src/app/admin/invoices/[id]/InvoiceDetailView.tsx");

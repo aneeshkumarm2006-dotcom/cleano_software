@@ -10,6 +10,7 @@ import {
 } from "@/components/customer/Field";
 import { updateClientProfile } from "../../actions/updateClientProfile";
 import { generateShareCoupon } from "../../actions/generateShareCoupon";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 interface Initial {
   name: string;
@@ -42,6 +43,7 @@ export default function AccountForm({
   referralDiscount: number;
   referrerCredit: number;
 }) {
+  const brandName = useWorkspaceName();
   const [name, setName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
   const [saving, setSaving] = useState(false);
@@ -62,7 +64,7 @@ export default function AccountForm({
 
   function openShare(network: "facebook" | "x") {
     const url = typeof window !== "undefined" ? window.location.origin + "/book" : "";
-    const text = "I love my Cleano cleanings — book yours:";
+    const text = `I love my ${brandName} cleanings — book yours:`;
     const href =
       network === "facebook"
         ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`
@@ -245,7 +247,7 @@ export default function AccountForm({
           <div className="cl-tile cl-tile-pad-lg">
             <span className="cl-label">Share &amp; save</span>
             <p style={{ fontSize: 13, color: "var(--primary-70)", margin: "10px 0 14px", lineHeight: 1.55 }}>
-              Share Cleano on social media and unlock a one-time coupon for your
+              Share {brandName} on social media and unlock a one-time coupon for your
               next booking.
             </p>
             <div style={{ display: "flex", gap: 8 }}>

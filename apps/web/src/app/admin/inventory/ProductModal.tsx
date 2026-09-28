@@ -32,6 +32,7 @@ import {
   ITEM_TYPE_NAME,
   type ItemType,
 } from "@bookmops/core/inventory";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -129,6 +130,7 @@ export function ProductModal({
   product,
   mode,
 }: ProductModalProps) {
+  const brandName = useWorkspaceName();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -702,7 +704,7 @@ export function ProductModal({
                     </p>
                   )}
                   <p className="text-xs text-[var(--primary)]/60 mt-1">
-                    Warehouse/locker stock. Below this, <strong>Cleano needs to
+                    Warehouse/locker stock. Below this, <strong>{brandName} needs to
                     purchase more</strong>.
                   </p>
                 </div>

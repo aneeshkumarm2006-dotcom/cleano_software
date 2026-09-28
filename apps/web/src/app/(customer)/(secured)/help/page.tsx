@@ -9,7 +9,7 @@ import FaqAccordion from "@/components/FaqAccordion";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "FAQ · My Cleano",
+  title: "FAQ",
 };
 
 export default async function PortalFaqPage({

@@ -7,6 +7,7 @@ import { LogOut, Download, Share, MessageCircle, X } from "lucide-react";
 import { useInstall } from "@/components/InstallContext";
 import type { UnreadChatCount } from "@/lib/chatUnread";
 import { useJobChatUnread } from "@/components/JobChatUnread";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 /**
  * Gap between staff-chat unread polls, measured from the END of one to the
@@ -168,6 +169,7 @@ const NAV = [
 export default function CleanerSidebar({ user, signOutAction, unreadAnnouncements = 0 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+  const brandName = useWorkspaceName();
   const [open, setOpen] = useState(false);
   const { canInstall, isStandalone, isIOSSafari, install } = useInstall();
   const showInstall = !isStandalone && (canInstall || isIOSSafari);
@@ -262,8 +264,8 @@ export default function CleanerSidebar({ user, signOutAction, unreadAnnouncement
             try {
               const n = new Notification(`${latest.senderName} sent a message`, {
                 body: latest.body,
-                icon: "/icon/192",
-                badge: "/icon/192",
+                icon: "/icon-192.png",
+                badge: "/icon-192.png",
                 tag: "cleano-chat",
               });
               n.onclick = () => {
@@ -342,7 +344,7 @@ export default function CleanerSidebar({ user, signOutAction, unreadAnnouncement
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <span className="cl-mobile-title">cleano</span>
+        <span className="cl-mobile-title">{brandName}</span>
         <span className="cl-mobile-spacer" />
         {/* Installed apps have no browser reload button, so without this the
             only way to get fresh jobs was to kill the app. Pull-to-refresh
@@ -375,7 +377,7 @@ export default function CleanerSidebar({ user, signOutAction, unreadAnnouncement
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
           </div>
-          <span className="cl-snav-wordmark">cleano</span>
+          <span className="cl-snav-wordmark" title={brandName}>{brandName}</span>
           <span className="cl-snav-badge">Crew</span>
           <button
             className="cl-drawer-close"

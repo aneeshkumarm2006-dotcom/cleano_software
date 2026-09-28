@@ -80,6 +80,6 @@ export async function generateMetadata({ params }: { params: Params }) {
   });
 
   return {
-    title: page ? `${page.title} | Cleano` : "Page Not Found",
+    title: page ? page.title : "Page Not Found",
   };
 }

@@ -8,6 +8,7 @@ import { generateProviderInvoice } from "@/app/admin/actions/generateProviderInv
 import { approveProviderInvoice } from "@/app/admin/actions/approveProviderInvoice";
 import type { ProviderInvoice } from "@/app/admin/actions/generateProviderInvoice.types";
 import { fmtDate } from "@/lib/time";
+import { useWorkspaceName } from "@/components/WorkspaceName";
 
 function formatDate(s: string | null) {
   if (!s) return "—";
@@ -17,6 +18,7 @@ function formatDate(s: string | null) {
 }
 
 export default function ProviderInvoiceView() {
+  const brandName = useWorkspaceName();
   const [loading, setLoading] = useState(false);
   const [invoice, setInvoice] = useState<ProviderInvoice | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export default function ProviderInvoiceView() {
                 </Text>
               </View>
               <View>
-                <Text style={{ fontSize: 14, color: "var(--primary)" }}>Cleano</Text>
+                <Text style={{ fontSize: 14, color: "var(--primary)" }}>{brandName}</Text>
                 <Text style={styles.meta}>Earnings Statement</Text>
               </View>
             </View>
