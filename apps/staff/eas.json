@@ -11,11 +11,11 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_PLATFORM_URL": "https://useawer.com" }
+      "env": { "EXPO_PUBLIC_PLATFORM_URL": "https://www.useawer.com" }
     },
     "production": {
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_PLATFORM_URL": "https://useawer.com" }
+      "env": { "EXPO_PUBLIC_PLATFORM_URL": "https://www.useawer.com" }
     }
   },
   "submit": {

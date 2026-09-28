@@ -64,7 +64,7 @@
           "locationWhenInUsePermission": "When you tap On my way, Bookmops Pro can send where you are once, so the office can see you're heading to the job. It isn't tracked after that.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false,
+          "motionUsagePermission": "Bookmops Pro doesn't use motion or fitness data. This permission is only listed because it's part of the location feature used for On my way.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false
