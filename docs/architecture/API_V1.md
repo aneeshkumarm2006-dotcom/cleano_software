@@ -577,6 +577,14 @@ All paths are under `/api/v1`. Notes on the endpoints:
 - **App Store review:** both apps need a demo company and account for the
   reviewers. If the customer app lets people create accounts, it must also let
   them delete their account in the app (Guideline 5.1.1(v)).
+- **App Review notes for Bookmops Pro** (paste into App Store Connect):
+  - *Account deletion (5.1.1(v)).* Accounts are created by the employer, not
+    in the app. More → Account → **Delete my account** explains that the
+    account belongs to the employer, what is deleted and what the company must
+    keep by law (pay and tax records), takes an optional reason, and after a
+    confirmation sends the request to the company
+    (`POST /api/v1/me/deletion-request`). The company's owners and admins get
+    an in-app alert and an email; the screen then shows "Request sent".
 
 ---
 

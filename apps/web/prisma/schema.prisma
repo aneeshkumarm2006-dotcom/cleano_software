@@ -121,6 +121,7 @@ model User {
   pushDevices                  PushDevice[]
   requestActivity              UserRequestActivity[]
   mediaUploads                 MediaUpload[]
+  accountDeletionRequests      AccountDeletionRequest[]
 
   @@unique([organizationId, email])
   // Present in the database since an earlier migration but never declared here,
@@ -4563,5 +4564,33 @@ model GroupMessageEdit {
   message        GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId, editedAt])
+  @@index([organizationId])
+}
+
+/// A staff member asking their company to delete their account (App Store
+/// guideline 5.1.1(v); POST /api/v1/me/deletion-request). The account is the
+/// employer's, and pay and tax records must be kept, so this is a request the
+/// office acts on, never a deletion. One row per person: asking again while it
+/// is PENDING changes nothing; asking after the office has handled it opens it
+/// again.
+model AccountDeletionRequest {
+  organizationId String    @default("")
+  id             String    @id @default(cuid())
+  userId         String
+  /// What the person said, if anything. At most 500 characters.
+  reason         String?   @db.Text
+  /// PENDING until the office acts on it; HANDLED after.
+  status         String    @default("PENDING")
+  /// The phone's id for the tap that made (or re-opened) it.
+  clientEventId  String?
+  requestedAt    DateTime
+  handledAt      DateTime?
+  handledById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
   @@index([organizationId])
 }

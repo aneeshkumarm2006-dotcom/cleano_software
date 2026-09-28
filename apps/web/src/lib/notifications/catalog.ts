@@ -29,6 +29,14 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     trigger: "Customer requests to deactivate their account.",
     channels: { EMAIL: true, SMS: false, APP_PUSH: true },
   },
+  {
+    recipient: "ADMIN",
+    category: "Account",
+    key: "admin.account.staff_deletion_request",
+    label: "Staff account deletion request",
+    trigger: "A staff member asks, from Bookmops Pro, for their account to be deleted.",
+    channels: { EMAIL: true },
+  },
   // General
   {
     recipient: "ADMIN",

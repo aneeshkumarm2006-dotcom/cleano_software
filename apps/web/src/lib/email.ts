@@ -3718,3 +3718,45 @@ export async function sendBillingPaymentFailed(opts: {
     }).catch((e) => console.error("sendBillingPaymentFailed", admin.email, e));
   }
 }
+
+/**
+ * A staff member asked the company to delete their account, from Bookmops
+ * Pro's "Delete my account" (App Store guideline 5.1.1(v)). To the company's
+ * active owners and admins only: removing an account is their call. Gated by
+ * `admin.account.staff_deletion_request`. The in-app feed entry is recorded
+ * by the caller (server/account/deletion.ts), whether or not this is sent.
+ */
+export async function sendAdminStaffDeletionRequest(opts: {
+  userId: string;
+  name: string;
+  email: string;
+  reason: string | null;
+}) {
+  const admins = await db.user.findMany({
+    where: { role: { in: ["OWNER", "ADMIN"] }, isActive: true, deletedAt: null },
+    select: { email: true },
+  });
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+  const html = layout(
+    h1(`${esc(opts.name)} asked to delete their account`) +
+      p(
+        "They asked from the Bookmops Pro app. Nothing has been deleted: the account stays as it is until someone here acts on it. " +
+          "Keep what the law requires you to keep (pay and tax records) and remove the rest.",
+      ) +
+      section([
+        ["Name", esc(opts.name)],
+        ["Email", esc(opts.email)],
+        ["Reason", opts.reason ? esc(opts.reason) : "None given"],
+      ]) +
+      btn("Open their profile", `${appUrl}/admin/employees/${encodeURIComponent(opts.userId)}`),
+  );
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Account deletion request: ${opts.name}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.account.staff_deletion_request" },
+    }).catch((e) => console.error("sendAdminStaffDeletionRequest", admin.email, e));
+  }
+}

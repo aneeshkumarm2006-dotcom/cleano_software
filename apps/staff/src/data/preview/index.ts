@@ -2,6 +2,7 @@
 // as the full DataSource, so an area added to the API client without sample
 // data here is a compile error rather than a crash on a simulator.
 import type { DataSource } from "../source";
+import { previewAccountApi } from "./account";
 import { previewAnnouncementsApi } from "./announcements";
 import { previewAvailabilityApi } from "./availability";
 import { previewAvailableApi } from "./available";
@@ -22,6 +23,7 @@ import { previewTrainingApi } from "./training";
 
 export const previewSource: DataSource = {
   ...previewJobsApi,
+  ...previewAccountApi,
   ...previewClockApi,
   ...previewDevicesApi,
   ...previewAvailableApi,

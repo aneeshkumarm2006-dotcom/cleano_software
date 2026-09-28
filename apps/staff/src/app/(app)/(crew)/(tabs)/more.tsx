@@ -98,7 +98,10 @@ export default function More() {
       />
       <MenuGroup
         title="Account"
-        items={[{ key: "password", label: "Change password", icon: "lock", onPress: () => router.push("/account/password") }]}
+        items={[
+          { key: "password", label: "Change password", icon: "lock", onPress: () => router.push("/account/password") },
+          { key: "delete", label: "Delete my account", icon: "trash", onPress: () => router.push("/account/delete") },
+        ]}
       />
 
       <Button label="Sign out" variant="danger" icon="signOut" onPress={signOut} />
