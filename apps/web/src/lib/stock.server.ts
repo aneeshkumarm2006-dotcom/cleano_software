@@ -90,7 +90,9 @@ function round2(n: number): number {
  * so "default" genuinely means "the one we picked", not "the only one".
  */
 export async function ensureDefaultLocationId(tx: StockClient): Promise<string> {
-  const existing = await tx.inventoryLocation.findFirst({
+  // ScopedTx and Prisma.TransactionClient share this delegate at runtime; the
+  // compiler can't unify their overloads, so read it through one of them.
+  const existing = await (tx as Prisma.TransactionClient).inventoryLocation.findFirst({
     where: { isActive: true },
     orderBy: { createdAt: "asc" },
     select: { id: true },

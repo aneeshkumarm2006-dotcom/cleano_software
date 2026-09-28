@@ -71,7 +71,9 @@ export async function findKitProduct(
   productId: string,
   client: ProductLookupClient = db
 ): Promise<KitProduct | null> {
-  return client.product.findUnique({
+  // The three client shapes share this delegate at runtime; their overloads
+  // are too wide for the compiler to unify, so read it through one of them.
+  return (client as Prisma.TransactionClient).product.findUnique({
     where: { id: productId },
     select: KIT_PRODUCT_SELECT,
   });
