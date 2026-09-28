@@ -119,6 +119,7 @@ model User {
   // Mobile API v1 (docs/architecture/API_V1.md §6, §7).
   idempotencyRecords           IdempotencyRecord[]
   pushDevices                  PushDevice[]
+  requestActivity              UserRequestActivity[]
   mediaUploads                 MediaUpload[]
 
   @@unique([organizationId, email])
@@ -153,11 +154,10 @@ model Session {
   token         String    @unique
   updatedAt     DateTime  @updatedAt
   userAgent     String?
-  /// When this session last made an authenticated /api/v1 request (API_V1.md
-  /// §6). An offline clock event claims "I had no signal from occurredAt
-  /// until now"; a successful request in between disproves it. Written only
-  /// by the v1 wrapper, at most every few seconds. better-auth neither reads
-  /// nor writes it.
+  /// No longer written or read. It held only a session's LATEST request, so
+  /// a request inside the reconnect grace erased the evidence; the offline
+  /// clock now reads UserRequestActivity (API_V1.md §6). Left in place: the
+  /// migrations here are additive.
   lastRequestAt DateTime?
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -4500,4 +4500,24 @@ model MediaUpload {
   @@index([organizationId, userId, createdAt])
   @@index([jobId])
   @@index([organizationId])
+}
+
+/// Which seconds a person made authenticated /api/v1 requests in, for the
+/// last few minutes (API_V1.md §6). An offline clock event claims "no signal
+/// from occurredAt until now"; any request in between, on any of the
+/// person's sessions, disproves it. One row per person per minute; written
+/// by the v1 wrapper with raw SQL (an atomic OR into `seconds`) and pruned
+/// after ACTIVITY_RETENTION_MS by the wrapper and the daily retention cron.
+model UserRequestActivity {
+  organizationId String @default("")
+  userId         String
+  /// Minutes since the Unix epoch (UTC): no time zone to get wrong.
+  minute         Int
+  /// Bit i set: at least one request during second i of that minute.
+  seconds        BigInt @default(0)
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId, minute])
+  @@index([minute])
+  @@index([userId])
 }

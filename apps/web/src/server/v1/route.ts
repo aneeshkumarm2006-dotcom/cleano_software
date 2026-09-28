@@ -52,6 +52,7 @@ import { roleAllowed, type Access } from "./access";
 import { flushEffects, type Effect } from "../effects";
 import type { Failure, Result } from "../result";
 import { E, errorBody, errorResponse, jsonResponse, V1Error } from "./http";
+import { recordActivity } from "./activity";
 import { claimKey, completeKey, isValidKey, releaseKey, requestHash } from "./idempotency";
 import { readJsonBody } from "./body";
 import { verifiedSessionToken } from "./session-token";
@@ -125,8 +126,8 @@ export interface AuthedContext<B, Q> extends TenantContext<B, Q> {
   session: {
     id: string;
     token: string;
-    /** The session's previous authenticated v1 request, before this one. */
-    lastRequestAt: Date | null;
+    /** When the session was created (signed in). The offline clock rule reads it (API_V1.md §6). */
+    createdAt: Date;
   };
   idempotencyKey: string | null;
 }
@@ -393,6 +394,10 @@ export function v1Route<
         });
         if (!person || person.organizationId !== org.id) throw E.unauthenticated();
         log.user = person.id;
+        // Any authenticated request is evidence of being online (API_V1.md
+        // §6), whatever it goes on to answer. Written after the response.
+        const personId = person.id;
+        after(() => runAsOrg(org, () => recordActivity(org.id, personId, receivedAt)));
         if (!person.isActive || person.deletedAt) {
           throw E.forbidden("ACCOUNT_INACTIVE", "This account has been switched off. Contact your office.");
         }
@@ -417,7 +422,7 @@ export function v1Route<
 
         const sessionRow = await db.session.findUnique({
           where: { token: session.session.token },
-          select: { id: true, lastRequestAt: true },
+          select: { id: true, createdAt: true },
         });
         if (!sessionRow) throw E.unauthenticated();
 
@@ -451,7 +456,6 @@ export function v1Route<
           });
           if (claim.kind === "replay") {
             log.replay = true;
-            await touchSession(sessionRow, receivedAt);
             return finish(
               jsonResponse(claim.statusCode, claim.body, requestId, { "Idempotent-Replayed": "true" }),
             );
@@ -472,7 +476,7 @@ export function v1Route<
           ...base,
           org,
           actor,
-          session: { id: sessionRow.id, token: session.session.token, lastRequestAt: sessionRow.lastRequestAt },
+          session: { id: sessionRow.id, token: session.session.token, createdAt: sessionRow.createdAt },
           idempotencyKey,
         };
 
@@ -498,7 +502,6 @@ export function v1Route<
           throw e;
         }
 
-        if (res.status < 400) await touchSession(sessionRow, receivedAt);
         return finish(res);
       });
     } catch (e) {
@@ -574,17 +577,6 @@ async function whyNoSession(req: Request, org: OrgContext): Promise<V1Error> {
     console.error("v1 session diagnosis", e);
   }
   return E.unauthenticated();
-}
-
-/**
- * Record this request as the session's latest (API_V1.md §6), at most every
- * few seconds so a busy screen doesn't write on every call.
- */
-async function touchSession(row: { id: string; lastRequestAt: Date | null }, now: Date): Promise<void> {
-  if (row.lastRequestAt && now.getTime() - row.lastRequestAt.getTime() < 5_000) return;
-  await db.session
-    .updateMany({ where: { id: row.id }, data: { lastRequestAt: now } })
-    .catch((e) => console.error("v1 session touch", e));
 }
 
 /**

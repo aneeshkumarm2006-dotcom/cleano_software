@@ -674,11 +674,26 @@ async function main() {
     // A phone that really was offline made no request between its tap and
     // this one. Staging answers slowly enough that this test's own earlier
     // requests would otherwise (correctly) disprove the claim.
+    // Activity is per person (UserRequestActivity), so "went offline" clears
+    // it; the sessions are dated before the tap, since a session newer than
+    // the tap is itself proof of being online. Waits out the wrapper's
+    // after-response write of the request before, so it can't land late.
     const wentOffline = async (msAgo: number) => {
+      await new Promise((r) => setTimeout(r, 1_500));
+      await db.userRequestActivity.deleteMany({ where: { userId: F.users.cleaner.id } });
       await db.session.updateMany({
         where: { userId: F.users.cleaner.id },
-        data: { lastRequestAt: new Date(Date.now() - msAgo) },
+        data: { createdAt: new Date(Date.now() - msAgo) },
       });
+    };
+    const activeAt = async (msAgo: number) => {
+      const second = Math.floor((Date.now() - msAgo) / 1_000);
+      const minute = Math.floor(second / 60);
+      await db.$executeRaw`
+        INSERT INTO "UserRequestActivity" ("organizationId", "userId", "minute", "seconds")
+        VALUES (${F.orgA.id}, ${F.users.cleaner.id}, ${minute}, ${BigInt(1) << BigInt(second - minute * 60)})
+        ON CONFLICT ("organizationId", "userId", "minute")
+        DO UPDATE SET "seconds" = "UserRequestActivity"."seconds" | EXCLUDED."seconds"`;
     };
     {
       await wentOffline(10 * 60_000);
@@ -687,9 +702,12 @@ async function main() {
       const s = await db.jobWorkSession.findFirst({ where: { jobId: F.jobs.offline, cleanerId: F.users.cleaner.id } });
       check("offline: a 3-minute gap is applied at the phone's time", r.status === 200 && near(s?.startedAt, e.occurredAt, 50) && r.body?.pendingReview === false, { r: r.body, s });
 
-      // Online well after the tap and before this request: disproved.
-      const sess = await db.session.findMany({ where: { userId: F.users.cleaner.id }, select: { id: true } });
-      await db.session.updateMany({ where: { id: { in: sess.map((x) => x.id) } }, data: { lastRequestAt: new Date(Date.now() - 60_000) } });
+      // Online well after the tap and before this request: disproved, even
+      // though a request inside the reconnect grace came after it (the
+      // single "last request" this replaced was overwritten by exactly that).
+      await wentOffline(10 * 60_000);
+      await activeAt(60_000);
+      await activeAt(5_000);
       const b = event(2 * 60_000);
       const br = await post(HOST_A, `${job(F.jobs.offline)}/breaks`, cookie, b);
       const brk = await db.jobBreak.findFirst({ where: { jobId: F.jobs.offline, cleanerId: F.users.cleaner.id } });
@@ -741,6 +759,24 @@ async function main() {
       check("offline: a retry raises no second request", again.headers["idempotent-replayed"] === "true" && count === 1, { count });
       const strike = await db.cleanerStrike.count({ where: { cleanerId: F.users.cleaner.id, jobId: F.jobs.late } });
       check("offline: lateness is judged at the applied (arrival) time, as §6 says", strike === 1, strike);
+    }
+    {
+      // A session signed in after the tap: the phone was online then, so the
+      // tap isn't provably offline even with no other request on record.
+      await wentOffline(30 * 60_000);
+      const fresh = await signIn(HOST_A, F.users.cleaner.email, PASSWORD, true);
+      const b = event(60_000);
+      const r = await post(HOST_A, `${job(F.jobs.late)}/breaks`, fresh, b);
+      const req = await db.timeLogChangeRequest.findFirst({ where: { clientEventId: b.clientEventId } });
+      check(
+        "offline: an event from a session signed in after the tap is not proven offline",
+        r.status === 200 && req?.offlineReason === "NOT_PROVEN_OFFLINE" && r.body?.pendingReview === true,
+        { r: r.body, req },
+      );
+      const end = await post(HOST_A, `${job(F.jobs.late)}/breaks/current/end`, fresh, event());
+      check("offline: ...and that break ends normally", end.status === 200, end.body);
+      const recorded = await db.userRequestActivity.count({ where: { userId: F.users.cleaner.id } });
+      check("offline: authenticated requests are recorded per person", recorded >= 1, recorded);
     }
     {
       // A clock-out with no clock-in is kept for the office, not dropped.

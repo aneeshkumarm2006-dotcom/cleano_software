@@ -5,8 +5,9 @@
 // tap has to count, with the time it happened -- and "I was offline" must not
 // become a way to backdate a shift. So the phone's time is applied only when
 //
-//   1. nothing disproves the claim of being offline: the session made no
-//      successful request after the tap while sitting on it; and
+//   1. nothing disproves the claim of being offline: the PERSON (on any of
+//      their sessions) made no authenticated request after the tap while
+//      sitting on it, and the session sending it existed at the tap; and
 //   2. the gap between the tap and its arrival is small (under five minutes),
 //      which covers normal lag and short dead spots.
 //
@@ -51,16 +52,62 @@ export type EventTimeDecision =
       reason: "FUTURE" | "NOT_PROVEN_OFFLINE" | "GAP_OVER_LIMIT";
     };
 
+/**
+ * How far back the server keeps a person's request activity. Anything older
+ * than the five-minute rule can only end in GAP_OVER_LIMIT or NOT_PROVEN_OFFLINE,
+ * both reviewed, so a little over that is enough; fifteen leaves room for skew.
+ */
+export const ACTIVITY_RETENTION_MS = 15 * 60_000;
+
+/** Activity is recorded to the second: each entry is the start of a second with a request in it. */
+export const ACTIVITY_RESOLUTION_MS = 1_000;
+
 export interface EventTimeInput {
   /** When the phone says the tap happened. */
   occurredAt: Date;
   /** When the server received it. */
   receivedAt: Date;
   /**
-   * The session's last successful request BEFORE this one, or null if none
-   * has been recorded.
+   * Every second (its start instant) in which this person made an
+   * authenticated request, on any session, over the last
+   * ACTIVITY_RETENTION_MS. Unordered; duplicates are fine. A second outside
+   * the retained span must not be passed, and none is inferred.
    */
-  lastRequestAt: Date | null;
+  activeSeconds: readonly Date[];
+  /**
+   * When the session sending this event was created, or null if unknown.
+   * A session that began after the tap proves the phone was online (it
+   * signed in) after it; unknown is treated the same way.
+   */
+  sessionCreatedAt: Date | null;
+}
+
+/**
+ * Whether anything proves the person was online after the tap and before the
+ * reconnection:
+ *
+ *   - a request in a second that lies wholly inside
+ *     (occurredAt + 1 s, receivedAt - RECONNECT_GRACE_MS); the second's
+ *     resolution is resolved in the phone's favour at both ends, so only a
+ *     request that was certainly inside the window counts;
+ *   - the session was created after the tap, or its creation is unknown.
+ *
+ * Per person, not per session: a second session on another phone, or the
+ * web, is evidence too, and a single "last request" can't be erased by a
+ * request made inside the grace just before the event.
+ */
+export function provablyOnlineAfter(input: EventTimeInput): boolean {
+  const occurred = input.occurredAt.getTime();
+  const lo = occurred + 1_000;
+  const hi = input.receivedAt.getTime() - RECONNECT_GRACE_MS;
+
+  if (!input.sessionCreatedAt || input.sessionCreatedAt.getTime() > occurred) return true;
+
+  for (const s of input.activeSeconds) {
+    const start = s.getTime();
+    if (start >= lo && start + ACTIVITY_RESOLUTION_MS <= hi) return true;
+  }
+  return false;
 }
 
 /**
@@ -70,8 +117,8 @@ export interface EventTimeInput {
  *   - claimed more than CLOCK_SKEW_TOLERANCE_MS in the future: nonsense, the
  *     server's time, nothing to review (no earlier time is being claimed);
  *   - claimed slightly in the future (skew): the server's time, no review;
- *   - a request after the tap and before the reconnection: disproven, the
- *     server's time, reviewed;
+ *   - online after the tap and before the reconnection (provablyOnlineAfter):
+ *     disproven, the server's time, reviewed;
  *   - a gap of five minutes or more: the server's time, reviewed;
  *   - otherwise the claimed time.
  */
@@ -90,10 +137,7 @@ export function decideEventTime(input: EventTimeInput): EventTimeDecision {
     };
   }
 
-  const last = input.lastRequestAt?.getTime() ?? null;
-  const onlineAfterTap =
-    last !== null && last > occurred + 1_000 && last < received - RECONNECT_GRACE_MS;
-  if (onlineAfterTap) {
+  if (provablyOnlineAfter(input)) {
     return {
       kind: "RECEIVED",
       appliedAt: input.receivedAt,

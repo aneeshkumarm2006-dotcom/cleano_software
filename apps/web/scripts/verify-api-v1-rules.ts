@@ -9,6 +9,7 @@
 import { createHmac } from "node:crypto";
 
 import {
+  ACTIVITY_RETENTION_MS,
   decideEventTime,
   offlineCorrectionReason,
   OFFLINE_APPLY_AS_CLAIMED_MS,
@@ -36,42 +37,69 @@ const T = (min: number, sec = 0) => new Date(Date.UTC(2026, 8, 25, 13, min, sec)
 const received = T(30);
 
 // ── Which time counts ─────────────────────────────────────────────────────
+// The session was signed in long before any tap here unless a case says so.
+const SIGNED_IN = new Date(Date.UTC(2026, 8, 25, 12, 0, 0));
+const decide = (occurredAt: Date, activeSeconds: Date[], sessionCreatedAt: Date | null = SIGNED_IN, receivedAt = received) =>
+  decideEventTime({ occurredAt, receivedAt, activeSeconds, sessionCreatedAt });
 {
-  const d = decideEventTime({ occurredAt: T(27), receivedAt: received, lastRequestAt: T(20) });
+  const d = decide(T(27), [T(20)]);
   check("3 min gap, nothing after the tap: the phone's time", [d.kind, d.appliedAt.toISOString()], ["CLAIMED", T(27).toISOString()]);
 }
 {
-  const d = decideEventTime({ occurredAt: T(27), receivedAt: received, lastRequestAt: null });
-  check("no request ever recorded: the phone's time", d.kind, "CLAIMED");
+  const d = decide(T(27), []);
+  check("no activity recorded: the phone's time", d.kind, "CLAIMED");
 }
 {
-  const d = decideEventTime({ occurredAt: T(10), receivedAt: received, lastRequestAt: T(5) });
+  const d = decide(T(10), [T(5)]);
   check("20 min gap: the server's time, for review", d.kind === "RECEIVED" && [d.appliedAt.toISOString(), d.review, d.reason], [received.toISOString(), true, "GAP_OVER_LIMIT"]);
 }
 {
-  const d = decideEventTime({ occurredAt: T(0), receivedAt: T(5), lastRequestAt: null });
+  const d = decide(T(0), [], SIGNED_IN, T(5));
   check("exactly five minutes is over the line", d.kind === "RECEIVED" && d.reason, "GAP_OVER_LIMIT");
   check("the threshold is five minutes", OFFLINE_APPLY_AS_CLAIMED_MS, 300_000);
 }
 {
   // Backdated: the phone made a call at :28, after claiming :27, and only
   // sent the event at :30. It was online; the claim is disproven.
-  const d = decideEventTime({ occurredAt: T(27), receivedAt: received, lastRequestAt: T(28) });
+  const d = decide(T(27), [T(28)]);
   check("a request after the tap disproves the claim", d.kind === "RECEIVED" && [d.reason, d.review], ["NOT_PROVEN_OFFLINE", true]);
 }
 {
+  // The bypass this replaced: evidence at :28, then a request inside the
+  // grace (:29:50) that used to overwrite the session's only "last request".
+  const d = decide(T(27), [T(28), T(29, 50)]);
+  check("a request in the grace doesn't erase earlier evidence", d.kind === "RECEIVED" && d.reason, "NOT_PROVEN_OFFLINE");
+}
+{
   // The reconnection itself: a refresh 10 s before the event arrived.
-  const d = decideEventTime({ occurredAt: T(27), receivedAt: received, lastRequestAt: T(29, 50) });
+  const d = decide(T(27), [T(29, 50)]);
   check("a request in the reconnect grace doesn't disprove it", d.kind, "CLAIMED");
   check("the reconnect grace is 30 s", RECONNECT_GRACE_MS, 30_000);
 }
 {
-  const d = decideEventTime({ occurredAt: T(27), receivedAt: received, lastRequestAt: T(27) });
-  check("a request at the tap itself doesn't disprove it", d.kind, "CLAIMED");
+  check("a request at the tap itself doesn't disprove it", decide(T(27), [T(27)]).kind, "CLAIMED");
+  // The second after the tap: within the 1 s margin at worst, so it doesn't count.
+  const tap = new Date(T(27).getTime() + 500);
+  check("a request in the second after the tap (inside the margin) doesn't", decide(tap, [T(27, 1)]).kind, "CLAIMED");
+  check("two seconds after the tap does", decide(tap, [T(27, 2)]).kind, "RECEIVED");
+  // The last whole second before the grace counts; the one straddling it doesn't.
+  check("a request in the last second before the grace counts", decide(T(27), [T(29, 29)]).kind, "RECEIVED");
+  check("a request in the second the grace starts doesn't", decide(T(27), [T(29, 30)]).kind, "CLAIMED");
+  check("activity before the tap doesn't disprove it", decide(T(27), [T(26, 59), T(25)]).kind, "CLAIMED");
 }
 {
-  const d = decideEventTime({ occurredAt: T(35), receivedAt: received, lastRequestAt: null });
+  const d = decide(T(27), [], T(28));
+  check("a session created after the tap: not provably offline", d.kind === "RECEIVED" && [d.reason, d.review], ["NOT_PROVEN_OFFLINE", true]);
+  check("a fresh sign-in with no activity at all is still not proven", decide(T(29), [], T(29, 5)).kind, "RECEIVED");
+  check("an unknown session start is not proven", decide(T(27), [], null).kind, "RECEIVED");
+  check("a session created before the tap is fine", decide(T(27), [], T(26)).kind, "CLAIMED");
+}
+{
+  const d = decide(T(35), []);
   check("a claim from the future: the server's time, nothing to review", d.kind === "RECEIVED" && [d.reason, d.review, d.appliedAt.toISOString()], ["FUTURE", false, received.toISOString()]);
+}
+{
+  check("activity is kept 15 minutes", ACTIVITY_RETENTION_MS, 900_000);
 }
 {
   const reason = offlineCorrectionReason({
