@@ -4,12 +4,12 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { writeAppSetting } from "@/lib/app-setting-write";
-import { logActivity } from "@/lib/activity-log";
 import { actorFromSession, type Actor } from "@/server/actor";
 import {
   accessibleChannel,
   listTeamChannels,
   markTeamChannelRead,
+  moderateTeamMessage,
   openDirectChannel,
   readTeamChatSettings,
   sendTeamMessage,
@@ -485,7 +485,12 @@ export async function getOrCreateDirectChannel(
   };
 }
 
-/** Soft-delete (moderate) a message. Admin only. */
+/**
+ * Soft-delete (moderate) a message. Moderators only (isAdminRole: OWNER,
+ * ADMIN, OPS_MANAGER). The shared moderation service
+ * (server/messages/team-chat.ts moderateTeamMessage), the one the phone's
+ * DELETE /manager/team/channels/:c/messages/:m runs.
+ */
 export async function deleteGroupMessage(
   messageId: string
 ): Promise<Result<{ id: string }>> {
@@ -496,33 +501,13 @@ export async function deleteGroupMessage(
   if (typeof messageId !== "string" || !messageId) {
     return { success: false, error: "Message not found" };
   }
-  const message = await db.groupMessage.findUnique({ where: { id: messageId } });
-  if (!message) return { success: false, error: "Message not found" };
-  if (message.deletedAt) return { success: true, data: { id: messageId } };
-
-  // Conditional, so that when two admins remove the same message the audit
-  // entry below names the one whose removal actually landed.
-  const removed = await db.groupMessage.updateMany({
-    where: { id: messageId, deletedAt: null },
-    data: { deletedAt: new Date(), deletedById: a.user.id },
-  });
-
-  // WHO removed it: on the row (deletedById), and in the activity log, which
-  // is the record an admin already reads for "who did what". The body is not
-  // copied there: removing it from view is the point of deleting it.
-  if (removed.count > 0) {
-    await logActivity({
-      category: "ADMIN",
-      action: "groupchat.message.deleted",
-      status: "SUCCESS",
-      actorId: a.user.id,
-      actorLabel: a.user.name ?? null,
-      targetType: "GroupMessage",
-      targetId: messageId,
-      message: `${a.user.name ?? "An admin"} removed a team chat message from ${message.senderName}.`,
-      metadata: { channelId: message.channelId, senderId: message.senderId },
-    });
-  }
-
-  return { success: true, data: { id: messageId } };
+  const res = await moderateTeamMessage(
+    actorOf(a.user, a.role),
+    null,
+    messageId,
+    new Date(),
+    "web",
+  );
+  if (!res.ok) return { success: false, error: res.status === 404 ? "Message not found" : res.message };
+  return { success: true, data: { id: res.value.id } };
 }
