@@ -125,6 +125,8 @@ model User {
   teamChatBlocksMade           TeamChatBlock[]              @relation("TeamChatBlocker")
   teamChatBlocksReceived       TeamChatBlock[]              @relation("TeamChatBlocked")
   teamMessageReports           TeamMessageReport[]
+  pushThrottles                PushThrottle[]
+  pushJobReminders             PushJobReminder[]
 
   @@unique([organizationId, email])
   // Present in the database since an earlier migration but never declared here,
@@ -918,6 +920,7 @@ model Job {
   reviewPhotos                     ReviewPhoto[]
   chatMessages                     JobChatMessage[]
   assignments                      JobAssignment[]
+  pushReminders                    PushJobReminder[]
   breaks                           JobBreak[]
   workSessions                     JobWorkSession[]
   checklists                       JobChecklist[]
@@ -3419,6 +3422,41 @@ model PushDevice {
   @@index([userId])
   @@index([organizationId])
   @@index([sessionId])
+}
+
+/// When a person was last pushed about something that bursts, such as a team
+/// chat channel (server/push): at most one push per person and key per window.
+model PushThrottle {
+  organizationId String   @default("")
+  id             String   @id @default(cuid())
+  userId         String
+  /// What the pushes are about, e.g. "team:<channelId>". Never personal data.
+  key            String
+  lastSentAt     DateTime
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, key])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+/// A one-hour job reminder push already sent (api/cron/job-reminders): one per
+/// person, job and start time, so it never repeats and a moved job gets a new one.
+model PushJobReminder {
+  organizationId String   @default("")
+  id             String   @id @default(cuid())
+  jobId          String
+  userId         String
+  startTime      DateTime
+  sentAt         DateTime @default(now())
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, jobId, userId, startTime])
+  @@index([jobId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([sentAt])
 }
 
 model JobAssignmentInvite {
