@@ -1,6 +1,7 @@
 import { Button, color, Icon, radius, space, Text } from "@bookmops/ui-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -41,10 +42,29 @@ export default function SignedInLayout() {
   );
 }
 
+/** After this long, opening offers a way out rather than only a spinner. */
+const SLOW_START_MS = 15_000;
+
 function Starting() {
+  const queryClient = useQueryClient();
+  const { signOut } = useSession();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), SLOW_START_MS);
+    return () => clearTimeout(t);
+  }, []);
   return (
-    <View style={{ flex: 1, backgroundColor: color.ground, justifyContent: "center" }}>
+    <View style={{ flex: 1, backgroundColor: color.ground, justifyContent: "center", paddingHorizontal: space[6], gap: space[4] }}>
       <Loading label="Opening Bookmops Pro" />
+      {slow ? (
+        <>
+          <Text variant="body" color="ink2" align="center">
+            This is taking longer than it should. Check your connection, then try again.
+          </Text>
+          <Button label="Try again" variant="secondary" size="md" onPress={() => void queryClient.refetchQueries({ queryKey: keys.me })} />
+          <Button label="Sign out" variant="secondary" size="md" icon="signOut" onPress={signOut} />
+        </>
+      ) : null}
     </View>
   );
 }

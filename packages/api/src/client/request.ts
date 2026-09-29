@@ -48,6 +48,9 @@ export class ApiError extends Error {
   }
 }
 
+/** How long one call may take before it is treated as a lost connection. */
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /** A v1 call: the path, the schema its response must match, and fetch options. */
 export type Request = <S extends z.ZodType>(path: string, schema: S, init?: RequestInit) => Promise<z.infer<S>>;
 
@@ -63,8 +66,13 @@ export function makeRequest(options: ClientOptions): Request {
   return async function request<S extends z.ZodType>(path: string, schema: S, init: RequestInit = {}): Promise<z.infer<S>> {
     const cookie = await options.getCookie();
     let res: Response;
+    // A request that never answers (a dead connection the phone hasn't
+    // noticed) would otherwise hold a screen on its spinner indefinitely.
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
     try {
       res = await doFetch(`${base}${path}`, {
+        signal: timeout.signal,
         ...init,
         // The session travels as an explicit header; the platform's own cookie
         // jar is not used, so nothing is sent that the app didn't choose.
@@ -84,6 +92,8 @@ export function makeRequest(options: ClientOptions): Request {
       });
     } catch {
       throw new ApiError("You're offline. We'll try again when you're back.", 0, "NETWORK", true);
+    } finally {
+      clearTimeout(timer);
     }
 
     // Where `redirect` isn't honoured, a response from anywhere but the
