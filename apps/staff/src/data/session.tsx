@@ -80,6 +80,7 @@ function initialSession(): Session {
 }
 
 const WRONG = "Email or password is incorrect.";
+const TROUBLE = "We couldn't sign you in just now. Try again in a minute.";
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -95,7 +96,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const res = await live.auth.signIn.email({ email, password });
       if (res.error) {
         // A 403 carries the company's own "switched off" wording; show it as is.
-        return { ok: false, error: res.error.status === 403 && res.error.message ? res.error.message : WRONG };
+        if (res.error.status === 403 && res.error.message) return { ok: false, error: res.error.message };
+        // The password was already accepted to get here, so anything but a
+        // 401 is our fault, not theirs: don't send them hunting for another one.
+        if (res.error.status !== 401) return { ok: false, error: TROUBLE };
+        return { ok: false, error: WRONG };
       }
       workspaceStore.save(workspace);
       queryClient.clear();

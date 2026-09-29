@@ -2,11 +2,13 @@ import type { Workspace } from "@bookmops/api/v1";
 import { Button, Card, ChoiceChips, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { Link } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, type TextInput, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, ScrollView, type TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PREVIEW_ROLES, type PreviewRole } from "@/data/preview-roles";
 import { useSession } from "@/data/session";
+
+const WORDMARK = require("../../assets/images/wordmark.png");
 
 /**
  * Development builds only: an account to sign in as without typing, for a
@@ -66,14 +68,7 @@ export default function SignIn() {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         <View style={{ paddingTop: insets.top + space[10], paddingHorizontal: space[6], paddingBottom: space[8], gap: space[3] }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
-            <View style={{ width: 40, height: 40, borderRadius: radius.md, backgroundColor: color.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text variant="heading" color="onChrome">
-                B
-              </Text>
-            </View>
-            <Text variant="eyebrow" color="onChrome" style={{ fontSize: 15, letterSpacing: 2 }}>
-              Bookmops
-            </Text>
+            <Image source={WORDMARK} style={{ width: 152, height: 48 }} resizeMode="contain" accessibilityLabel="Bookmops" />
             <View style={{ paddingHorizontal: space[2], paddingVertical: 2, borderRadius: radius.sm, backgroundColor: color.tagOnChrome }}>
               <Text variant="eyebrow" color="accentOnChrome">
                 Pro
