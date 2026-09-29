@@ -392,10 +392,11 @@ export const auth = betterAuth({
   },
   plugins: [
     // Bookmops Pro signs in here through Better Auth's Expo plugin (API_V1.md
-    // §2). The plugin copies the app's `expo-origin` header into Origin when a
-    // request has none; `appOriginsFor` above decides where that origin is
-    // trusted, which is only ever sign-in and sign-out.
-    expo(),
+    // §2). The app's `expo-origin` header is copied into Origin by the
+    // api/auth route, not by the plugin, whose copy crashes on requests with a
+    // body (see withAppOrigin there); `appOriginsFor` above decides where that
+    // origin is trusted, which is only ever sign-in and sign-out.
+    expo({ disableOriginOverride: true }),
     customSession(async (session) => {
       if (session.user) {
         // Only fetch the role — full user record was an expensive overshoot.

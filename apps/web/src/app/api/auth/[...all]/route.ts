@@ -72,12 +72,35 @@ function isRefusedAuthPath(url: string): boolean {
 
 const notFound = () => new Response("Not Found", { status: 404 });
 
+/**
+ * Bookmops Pro's `expo-origin` header, copied into Origin here rather than by
+ * the Expo plugin.
+ *
+ * The plugin does it with `new Request(request, { headers })`, which on
+ * Vercel's Node runtime throws for any request with a body (a streamed body
+ * needs `duplex: "half"`). better-auth turns the throw into a bare 500, and the
+ * app shows that as "Email or password is incorrect": every phone sign-in
+ * failed after its password had already been checked. Buffering the body first
+ * sidesteps it, and lib/auth.ts switches the plugin's own copy off.
+ *
+ * This only names the origin. Whether `bookmopspro://` is trusted, and on which
+ * paths, is still decided by trustedOrigins in lib/auth.ts.
+ */
+async function withAppOrigin(req: Request): Promise<Request> {
+  const appOrigin = req.headers.get("expo-origin");
+  if (!appOrigin || req.headers.get("origin")) return req;
+  const headers = new Headers(req.headers);
+  headers.set("origin", appOrigin);
+  const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+  return new Request(req.url, { method: req.method, headers, body });
+}
+
 export async function POST(req: Request): Promise<Response> {
   if (isRefusedAuthPath(req.url)) return notFound();
-  return (await unusableWorkspace()) ?? handler.POST(req);
+  return (await unusableWorkspace()) ?? handler.POST(await withAppOrigin(req));
 }
 
 export async function GET(req: Request): Promise<Response> {
   if (isRefusedAuthPath(req.url)) return notFound();
-  return (await unusableWorkspace()) ?? handler.GET(req);
+  return (await unusableWorkspace()) ?? handler.GET(await withAppOrigin(req));
 }
