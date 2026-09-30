@@ -8,7 +8,7 @@ import { platformDb } from "@/lib/platform-db";
 import { cleanerSeatUsage } from "@/lib/plan-limits";
 import { reconcileSubscriptionFromStripe } from "@/lib/billing";
 import {
-  ANNUAL_MONTHS_SAVED,
+  annualMonthsSaved,
   PLANS,
   effectiveMonthlyFor,
   priceFor,
@@ -478,7 +478,7 @@ export default async function SettingsPage({
     canManageBilling: Boolean(subscription?.stripeCustomerId),
     cleanersUsed: seats?.used ?? 0,
     cleanerLimit: seats?.limit ?? null,
-    monthsSaved: ANNUAL_MONTHS_SAVED,
+    monthsSaved: annualMonthsSaved(),
   };
 
   return (

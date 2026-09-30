@@ -3,7 +3,8 @@
  * tenants into the product. */
 import {
   ANNUAL_MONTHS_CHARGED,
-  ANNUAL_MONTHS_SAVED,
+  LAUNCH_OFFER,
+  annualMonthsSaved,
   PLANS,
   effectiveMonthlyFor,
   priceFor,
@@ -21,13 +22,20 @@ const check = (label: string, ok: boolean, got?: unknown) => {
 async function main() {
   console.log("Prices");
   check("Starter monthly is the listed price", priceFor("STARTER", "MONTHLY") === PLANS.STARTER.monthlyUsd);
-  check("Starter yearly charges 10 months", priceFor("STARTER", "ANNUAL") === 49 * ANNUAL_MONTHS_CHARGED, priceFor("STARTER", "ANNUAL"));
-  check("Professional yearly charges 10 months", priceFor("PROFESSIONAL", "ANNUAL") === 149 * ANNUAL_MONTHS_CHARGED, priceFor("PROFESSIONAL", "ANNUAL"));
+  // Dated, because the yearly price depends on whether the launch offer runs.
+  const later = new Date("2027-02-01T00:00:00Z");
+  const launch = new Date("2026-10-15T00:00:00Z");
+  check("Starter yearly charges 10 months after launch", priceFor("STARTER", "ANNUAL", later) === 49 * ANNUAL_MONTHS_CHARGED, priceFor("STARTER", "ANNUAL", later));
+  check("Professional yearly charges 10 months after launch", priceFor("PROFESSIONAL", "ANNUAL", later) === 149 * ANNUAL_MONTHS_CHARGED, priceFor("PROFESSIONAL", "ANNUAL", later));
+  check("the launch offer charges 9 months", priceFor("STARTER", "ANNUAL", launch) === 49 * LAUNCH_OFFER.annualMonthsCharged, priceFor("STARTER", "ANNUAL", launch));
+  check("the launch offer ends on its date", priceFor("STARTER", "ANNUAL", LAUNCH_OFFER.endsAt) === 49 * ANNUAL_MONTHS_CHARGED);
+  check("monthly is untouched by the launch offer", priceFor("STARTER", "MONTHLY", launch) === 49);
   check("a quoted tier has no price either way",
     priceFor("ORGANIZATION", "MONTHLY") === null && priceFor("ORGANIZATION", "ANNUAL") === null);
   check("yearly is never dearer than 12x monthly",
     (["STARTER", "PROFESSIONAL"] as const).every((p) => priceFor(p, "ANNUAL")! <= PLANS[p].monthlyUsd! * 12));
-  check("two months are saved", ANNUAL_MONTHS_SAVED === 2, ANNUAL_MONTHS_SAVED);
+  check("two months are saved after launch", annualMonthsSaved(later) === 2, annualMonthsSaved(later));
+  check("three months are saved during launch", annualMonthsSaved(launch) === 3, annualMonthsSaved(launch));
   check("effective monthly on yearly is below the monthly price",
     effectiveMonthlyFor("STARTER", "ANNUAL")! < PLANS.STARTER.monthlyUsd!);
   check("effective monthly on monthly equals the monthly price",

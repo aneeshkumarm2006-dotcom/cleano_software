@@ -1,20 +1,43 @@
 /**
  * What each plan costs and what it allows.
  *
- * Prices are placeholders agreed with Prem and are meant to be changed; the
- * limits are not decoration -- they are enforced, so a Starter workspace really
- * cannot add a sixth cleaner.
+ * Prices set 2026-09-30, in USD, against the market: BookingKoala $27-$197/mo,
+ * ZenMaid $19-$49 plus $4-$24 per cleaner (about $200-$300/mo for a real crew),
+ * Jobber $49 for one user or $199 for five, Launch27 $75/$150/$299 with 15% off
+ * yearly and a 14-day trial. Ours are flat per crew size with no per-cleaner
+ * fee, a longer trial with no card, and a better yearly discount. The limits
+ * are not decoration -- they are enforced, so a Starter workspace really cannot
+ * add a sixth cleaner.
  */
 import type { OrgPlan } from "@prisma/client";
 
 export const TRIAL_DAYS = 30;
 
-/**
- * Months charged on an annual plan. Two free is the usual shape and it is a
- * placeholder like every price here: the annual discount is one of the pricing
- * decisions still to be made, and this is the single line that changes it.
- */
+/** Months charged on an annual plan: two free (about 17% off). */
 export const ANNUAL_MONTHS_CHARGED = 10;
+
+/**
+ * The launch offer: a yearly plan bought before `endsAt` charges nine months
+ * instead of ten (three free). The price is written onto the Stripe
+ * subscription when it is bought (billing.ts uses price_data), so it renews at
+ * that price — a founding customer keeps it — while a later plan change is
+ * priced fresh.
+ */
+export const LAUNCH_OFFER = {
+  endsAt: new Date("2027-01-01T00:00:00Z"),
+  annualMonthsCharged: 9,
+  /** Shown where the offer is. */
+  label: "Launch offer: 3 months free when you pay yearly, until December 31",
+} as const;
+
+export function launchOfferActive(now: Date = new Date()): boolean {
+  return now < LAUNCH_OFFER.endsAt;
+}
+
+/** Months charged for a year bought now. */
+export function annualMonthsCharged(now: Date = new Date()): number {
+  return launchOfferActive(now) ? LAUNCH_OFFER.annualMonthsCharged : ANNUAL_MONTHS_CHARGED;
+}
 
 export interface PlanDef {
   label: string;
@@ -93,21 +116,23 @@ export type BillingIntervalKey = "MONTHLY" | "ANNUAL";
  * never quietly disagree with the monthly one it is meant to discount. NULL
  * stays NULL: a quoted tier has no listed price on either cycle.
  */
-export function priceFor(plan: OrgPlan, interval: BillingIntervalKey): number | null {
+export function priceFor(plan: OrgPlan, interval: BillingIntervalKey, now: Date = new Date()): number | null {
   const monthly = PLANS[plan].monthlyUsd;
   if (monthly == null) return null;
-  return interval === "ANNUAL" ? monthly * ANNUAL_MONTHS_CHARGED : monthly;
+  return interval === "ANNUAL" ? monthly * annualMonthsCharged(now) : monthly;
 }
 
 /** What an annual plan works out to per month, for the "$X/mo billed yearly" line. */
-export function effectiveMonthlyFor(plan: OrgPlan, interval: BillingIntervalKey): number | null {
-  const total = priceFor(plan, interval);
+export function effectiveMonthlyFor(plan: OrgPlan, interval: BillingIntervalKey, now: Date = new Date()): number | null {
+  const total = priceFor(plan, interval, now);
   if (total == null) return null;
   return interval === "ANNUAL" ? Math.round((total / 12) * 100) / 100 : total;
 }
 
-/** Whole months saved by paying yearly. Zero when there is no discount. */
-export const ANNUAL_MONTHS_SAVED = 12 - ANNUAL_MONTHS_CHARGED;
+/** Whole months saved by paying yearly, launch offer included. */
+export function annualMonthsSaved(now: Date = new Date()): number {
+  return 12 - annualMonthsCharged(now);
+}
 
 export function trialEndFrom(start: Date): Date {
   const end = new Date(start);

@@ -22,7 +22,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { PLANS, TRIAL_DAYS } from "@/lib/plans";
+import { annualMonthsSaved, LAUNCH_OFFER, launchOfferActive, PLANS, priceFor, TRIAL_DAYS } from "@/lib/plans";
 
 import { BookmopsWordmark } from "@/components/BookmopsLogo";
 import Reveal from "./Reveal";
@@ -660,7 +660,15 @@ export default function WelcomePage() {
                         </>
                       )}
                     </p>
-                    <p className="mk-plan-cap">{cap}</p>
+                    <p className="mk-plan-cap">
+                      {cap}
+                      {p.monthlyUsd != null && (
+                        <>
+                          <br />
+                          or ${priceFor(key, "ANNUAL")?.toLocaleString("en-US")} a year, {annualMonthsSaved()} months free
+                        </>
+                      )}
+                    </p>
                     <Link
                       href={
                         p.selfServe
@@ -693,6 +701,11 @@ export default function WelcomePage() {
               Prices in USD. Payments from your customers settle into your own Stripe
               account, not ours.
             </p>
+            {launchOfferActive() && (
+              <p className="mk-plans-foot" data-reveal>
+                <b>{LAUNCH_OFFER.label}.</b>
+              </p>
+            )}
           </div>
         </section>
 
