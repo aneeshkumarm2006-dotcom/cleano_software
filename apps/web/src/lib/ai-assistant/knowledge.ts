@@ -25,6 +25,8 @@ import {
   normalizeAiAssistantConfig,
   type AiAssistantConfig,
 } from "./config";
+import { SERVICE_TYPES } from "@/app/(book)/book/types";
+
 import { buildAvailabilitySummary } from "./availability";
 import { workspaceName } from "@/lib/workspace-name";
 
@@ -75,6 +77,10 @@ export async function buildWorkspaceKnowledge(): Promise<WorkspaceKnowledge> {
       businessEmail ? `Email: ${businessEmail}` : "",
       timezone ? `Timezone: ${timezone}` : "",
       bookingUrl ? `Online booking page (share this link): ${bookingUrl}` : "",
+      // One link per service, so the customer lands with it already chosen.
+      bookingUrl
+        ? `When the customer has said which service they want, share that service's own booking link instead:\n${SERVICE_TYPES.map((t) => `- ${t.label}: ${bookingUrl}?service=${t.value}`).join("\n")}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n"),

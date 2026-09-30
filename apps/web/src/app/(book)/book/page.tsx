@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
-import { BookingDraft, EMPTY_DRAFT } from "./types";
+import { BookingDraft, EMPTY_DRAFT, SERVICE_TYPES } from "./types";
 import {
   maxReachableStep,
   stepBlockers,
@@ -86,6 +86,15 @@ export default function BookPage() {
 
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<BookingDraft>(EMPTY_DRAFT);
+  // `?service=DEEP`: the assistant's booking links name the service the
+  // customer asked about, so they land on it already chosen. Read once, and only
+  // a service this page knows; anything else leaves the default.
+  useEffect(() => {
+    const asked = new URLSearchParams(window.location.search).get("service")?.toUpperCase();
+    if (asked && SERVICE_TYPES.some((s) => s.value === asked)) {
+      setDraft((d) => ({ ...d, serviceType: asked, frequency: "ONE_TIME" }));
+    }
+  }, []);
   const [basePrice, setBasePrice] = useState(0);
   const [minInfo, setMinInfo] = useState<{ applied: boolean; min: number }>({
     applied: false,
