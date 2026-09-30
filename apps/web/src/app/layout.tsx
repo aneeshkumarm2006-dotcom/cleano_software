@@ -9,6 +9,7 @@ import { STORE_TZ } from "@/lib/timezone";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import MetaPixel from "@/components/MetaPixel";
+import { orgSlugFromRequestHeaders, PLATFORM_ORG_SLUG } from "@/lib/tenant";
 import { WorkspaceNameProvider } from "@/components/WorkspaceName";
 
 /**
@@ -179,7 +180,8 @@ export default async function RootLayout({
       <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />
         <WorkspaceNameProvider name={brandName}>{children}</WorkspaceNameProvider>
-        <MetaPixel />
+        {/* Decided from the host on the server: a company's own `/` never reports here. */}
+        <MetaPixel onPlatformHost={orgSlugFromRequestHeaders(await headers()) === PLATFORM_ORG_SLUG} />
       </body>
     </html>
   );

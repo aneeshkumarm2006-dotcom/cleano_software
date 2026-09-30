@@ -41,13 +41,13 @@ export function trackMeta(event: string, params?: Record<string, unknown>): void
   }
 }
 
-export default function MetaPixel() {
+export default function MetaPixel({ onPlatformHost = false }: { onPlatformHost?: boolean }) {
   const pathname = usePathname();
   const loaded = useRef(false);
 
   useEffect(() => {
     const id = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-    if (!id || !isTrackedPath(pathname)) return;
+    if (!id || !isTrackedPath(pathname, onPlatformHost)) return;
 
     if (!loaded.current && !window.fbq) {
       loaded.current = true;
@@ -74,7 +74,7 @@ export default function MetaPixel() {
     // Every funnel page view, including client-side navigations, which a bare
     // script tag would miss entirely.
     trackMeta("PageView");
-  }, [pathname]);
+  }, [pathname, onPlatformHost]);
 
   return null;
 }

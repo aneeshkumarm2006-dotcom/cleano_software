@@ -72,7 +72,8 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "Bookmops · Software for cleaning companies",
+  // Absolute: the root layout's template would add "· Bookmops" a second time.
+  title: { absolute: "Bookmops · Software for cleaning companies" },
   description:
     "Scheduling, crew, customers, invoicing and payroll for cleaning companies — on your own address. Thirty days free, no card.",
 };
@@ -250,7 +251,7 @@ const FAQ = [
   },
   {
     q: "Do my cleaners have to install an app?",
-    a: "No. It opens in a browser like any other page, and adds itself to the home screen if they want it there. Nothing to approve, nothing to update.",
+    a: "No. It opens in a browser like any other page, and adds itself to the home screen if they want it there. For crews who would rather have a store app, Bookmops Pro for iPhone and Android is on its way.",
   },
   {
     q: "What does the address get me?",

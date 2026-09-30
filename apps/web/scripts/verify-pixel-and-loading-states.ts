@@ -44,6 +44,11 @@ for (const p of [
 ]) {
   check(`${p} is NOT tracked`, !isTrackedPath(p));
 }
+// Bookmops' own home is `/` on the platform host (served from /welcome), and
+// only there: the same path on a company's subdomain stays untracked.
+check("/ on the platform host is tracked", isTrackedPath("/", true));
+check("/ on a company host is NOT tracked", !isTrackedPath("/", false));
+check("a tenant path stays untracked even on the platform host", !isTrackedPath("/book", true));
 // A path that merely starts with the same letters is not the funnel.
 check("/welcome-back is not tracked", !isTrackedPath("/welcome-back"));
 check("/get-started-now is not tracked", !isTrackedPath("/get-started-now"));

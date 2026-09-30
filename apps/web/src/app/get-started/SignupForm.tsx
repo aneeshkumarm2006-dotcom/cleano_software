@@ -101,6 +101,9 @@ export default function SignupForm({
         // rather than on the server because the pixel lives in the browser,
         // and only after the workspace really exists.
         trackMeta("CompleteRegistration", { content_name: "workspace_signup" });
+        // Every signup starts the free trial, so this is also Meta's StartTrial:
+        // the event trial-optimised campaigns bid on.
+        trackMeta("StartTrial", { content_name: plan });
       }
       else setError({ field: r.field, message: r.message });
     } catch {

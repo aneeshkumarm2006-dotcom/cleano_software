@@ -6,7 +6,7 @@ import SiteShell from "../_site/SiteShell";
 import { SUPPORT_EMAIL, SUPPORT_RESPONSE_TIME } from "../_site/contact";
 
 export const metadata: Metadata = {
-  title: "Support · Bookmops",
+  title: "Support",
   description:
     "Get help with Bookmops and the Bookmops Pro app: who to contact, and answers to common questions.",
 };

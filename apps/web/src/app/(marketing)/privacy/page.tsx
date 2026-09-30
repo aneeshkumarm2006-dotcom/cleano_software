@@ -5,7 +5,7 @@ import SiteShell from "../_site/SiteShell";
 import { OPERATOR, PRIVACY_EMAIL } from "../_site/contact";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy · Bookmops",
+  title: "Privacy Policy",
   description:
     "How Bookmops, the software cleaning companies use to run their business, handles personal information.",
 };

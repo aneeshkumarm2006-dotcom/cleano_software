@@ -15,7 +15,14 @@
 /** Public, unauthenticated funnel pages belonging to the platform itself. */
 export const TRACKED_PATHS = ["/welcome", "/get-started"] as const;
 
-export function isTrackedPath(pathname: string): boolean {
+/**
+ * `onPlatformHost`: the request arrived on Bookmops' own host (www), where `/`
+ * is the marketing home (the proxy serves /welcome there while the address bar
+ * still says `/`). On a company's subdomain `/` is that company's own page, so
+ * it is tracked ONLY when the server says this is the platform host.
+ */
+export function isTrackedPath(pathname: string, onPlatformHost = false): boolean {
+  if (pathname === "/") return onPlatformHost;
   // Exact match, or a genuine sub-path. NOT a prefix match on the raw string:
   // "/welcome-back" starts with "/welcome" and is a different page.
   return TRACKED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
