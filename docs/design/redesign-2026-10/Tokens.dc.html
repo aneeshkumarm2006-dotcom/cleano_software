@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Colour and type tokens</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#ffffff;color:#0F1B2A}
+</style>
+</helmet>
+<div style="width: 880px; height: 620px; box-sizing: border-box; padding: 40px; background: #ffffff; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 700">Colour &amp; type tokens</h1>
+<p style="margin: 0; font-size: 14px; color: #55657A">Three brand colours carry the whole UI. Status colours only ever mean status.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{brand}}" as="c" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="{{c.swatch}}"></div>
+<span style="font-size: 14px; font-weight: 700">{{c.name}}</span>
+<span style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #3A4A5C">{{c.hex}}</span>
+<span style="font-size: 12px; color: #55657A">{{c.use}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{neutrals}}" as="c" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="{{c.swatch}}"></div>
+<div style="display: flex; flex-direction: column">
+<span style="font-size: 13px; font-weight: 700">{{c.name}}</span>
+<span style="font-size: 12px; color: #55657A">{{c.hex}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+<sc-for list="{{status}}" as="s" hint-placeholder-count="5">
+<span style="{{s.style}}">{{s.label}}</span>
+</sc-for>
+<span style="flex-grow: 1"></span>
+<button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #077AB4; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">Primary</button>
+<button type="button" style="height: 40px; padding: 0 16px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600">Secondary</button>
+</div>
+<div style="display: flex; gap: 32px; align-items: baseline; border-top: 1px solid #E5EAF0; padding-top: 20px">
+<span style="font-size: 28px; font-weight: 700">Figtree 28</span>
+<span style="font-size: 20px; font-weight: 700">Page title 20</span>
+<span style="font-size: 16px; font-weight: 700">Card title 16</span>
+<span style="font-size: 14px">Body 14</span>
+<span style="font-size: 12px; color: #55657A">Caption 12</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var sw = function (c, border) { return 'height: 88px; border-radius: 10px; background: ' + c + (border ? '; border: 1px solid #E5EAF0' : ''); };
+    var dot = function (c) { return 'width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px; border: 1px solid #E5EAF0; background: ' + c; };
+    var pill = function (bg, fg) { return 'display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: ' + bg + '; color: ' + fg; };
+    return {
+      brand: [
+        { name: 'Sidebar', hex: '#2B3337', use: 'Navigation background; white text on it', swatch: sw('#2B3337') },
+        { name: 'Accent', hex: '#1B9ADB', use: 'Chart bars, active tabs, icons, dots', swatch: sw('#1B9ADB') },
+        { name: 'Accent strong', hex: '#077AB4', use: 'Buttons and links (passes AA with white)', swatch: sw('#077AB4') },
+        { name: 'White', hex: '#FFFFFF', use: 'Cards, top bar, tables, inputs', swatch: sw('#ffffff', true) }
+      ],
+      neutrals: [
+        { name: 'Canvas', hex: '#F4F7FB', swatch: dot('#F4F7FB') },
+        { name: 'Border', hex: '#E5EAF0', swatch: dot('#E5EAF0') },
+        { name: 'Ink', hex: '#0F1B2A', swatch: dot('#0F1B2A') },
+        { name: 'Muted text', hex: '#55657A', swatch: dot('#55657A') }
+      ],
+      status: [
+        { label: 'Scheduled', style: pill('#E0F2FE', '#0369A1') },
+        { label: 'In progress', style: pill('#FEF3C7', '#92400E') },
+        { label: 'Completed', style: pill('#DCFCE7', '#15803D') },
+        { label: 'Unassigned', style: pill('#FEE2E2', '#B91C1C') },
+        { label: 'Cancelled', style: pill('#F1F5F9', '#475569') }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

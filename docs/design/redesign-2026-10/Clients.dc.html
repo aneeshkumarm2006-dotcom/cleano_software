@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clients</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="Sidebar" active="Clients" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px; flex-grow: 1">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700">Clients</h1>
+<span style="font-size: 13px; color: #55657A">412 active</span>
+</div>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Import</button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+Add client
+</button>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px; display: flex; gap: 20px">
+<section style="flex-grow: 1; min-width: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+<div style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #E5EAF0">
+<label style="display: flex; align-items: center; gap: 8px; flex-grow: 1; height: 38px; box-sizing: border-box; padding: 0 12px; border: 1px solid #D7DEE7; border-radius: 8px; color: #55657A">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35"></path></svg>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search clients</span>
+<input type="search" placeholder="Search name, phone or email" style="border: 0; outline: none; font: inherit; font-size: 14px; flex-grow: 1; min-width: 0; background: transparent; color: #0F1B2A">
+</label>
+<button type="button" style="display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; cursor: pointer"><span style="color: #55657A">Tag:</span><span style="font-weight: 600">All</span></button>
+<button type="button" style="display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; cursor: pointer"><span style="color: #55657A">Sort:</span><span style="font-weight: 600">Recent</span></button>
+</div>
+<table style="width: 100%; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="background: #F8FAFC; height: 42px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #55657A">
+<th style="padding: 0 12px 0 20px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Client</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Phone</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Last clean</th>
+<th style="padding: 0 12px; font-weight: 700; text-align: right; border-bottom: 1px solid #E5EAF0">Lifetime</th>
+<th style="padding: 0 20px 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Tags</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="11">
+<tr onClick="{{r.pick}}" style="{{r.rowStyle}}">
+<td style="padding: 0 12px 0 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="{{r.avStyle}}">{{r.ini}}</span>
+<div style="display: flex; flex-direction: column; min-width: 0">
+<span style="font-weight: 600">{{r.name}}</span>
+<span style="font-size: 12px; color: #55657A">{{r.email}}</span>
+</div>
+</div>
+</td>
+<td style="padding: 0 12px; color: #3A4A5C; white-space: nowrap; font-variant-numeric: tabular-nums">{{r.phone}}</td>
+<td style="padding: 0 12px; color: #3A4A5C; white-space: nowrap">{{r.last}}</td>
+<td style="padding: 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">{{r.ltv}}</td>
+<td style="padding: 0 20px 0 12px">
+<div style="display: flex; gap: 6px">
+<sc-for list="{{r.tags}}" as="t" hint-placeholder-count="1">
+<span style="font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: #F1F5F9; color: #3A4A5C; white-space: nowrap">{{t}}</span>
+</sc-for>
+</div>
+</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</section>
+
+<aside aria-label="Client details" style="width: 360px; flex-shrink: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+<div style="padding: 24px 20px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; border-bottom: 1px solid #E5EAF0">
+<span style="width: 64px; height: 64px; border-radius: 999px; background: {{accentTint}}; color: {{accentStrong}}; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700">{{sel.ini}}</span>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700">{{sel.name}}</h2>
+<span style="font-size: 13px; color: #55657A">Client since March 2024</span>
+</div>
+<div style="display: flex; gap: 8px; margin-top: 4px">
+<sc-for list="{{actions}}" as="a" hint-placeholder-count="4">
+<button type="button" aria-label="{{a.label}}" style="width: 44px; height: 44px; border: 1px solid #D7DEE7; border-radius: 10px; background: #ffffff; color: {{accentStrong}}; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{a.d}}"></path></svg>
+</button>
+</sc-for>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #E5EAF0">
+<div style="padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 2px; border-right: 1px solid #E5EAF0">
+<span style="font-size: 18px; font-weight: 700">24</span><span style="font-size: 12px; color: #55657A">Jobs</span>
+</div>
+<div style="padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 2px; border-right: 1px solid #E5EAF0">
+<span style="font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums">{{sel.ltv}}</span><span style="font-size: 12px; color: #55657A">Lifetime</span>
+</div>
+<div style="padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 2px">
+<span style="font-size: 18px; font-weight: 700">5.0</span><span style="font-size: 12px; color: #55657A">Avg rating</span>
+</div>
+</div>
+<div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #E5EAF0; font-size: 14px">
+<div style="display: flex; gap: 12px"><span style="width: 72px; color: #55657A">Email</span><span style="font-weight: 500">{{sel.email}}</span></div>
+<div style="display: flex; gap: 12px"><span style="width: 72px; color: #55657A">Phone</span><span style="font-weight: 500">{{sel.phone}}</span></div>
+<div style="display: flex; gap: 12px"><span style="width: 72px; color: #55657A">Address</span><span style="font-weight: 500">214 Aspen Ridge Pl SW, Calgary</span></div>
+<div style="display: flex; gap: 12px"><span style="width: 72px; color: #55657A">Source</span><span style="font-weight: 500">Google search</span></div>
+</div>
+<div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #55657A">Next job</h3>
+<div style="border: 1px solid #E5EAF0; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px">
+<span style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; background: {{accentTint}}; color: {{accentStrong}}; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1">
+<span style="font-size: 11px; font-weight: 700">OCT</span><span style="font-size: 16px; font-weight: 700">14</span>
+</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+<span style="font-size: 14px; font-weight: 600">Standard clean · 9:00 AM</span>
+<span style="font-size: 12px; color: #55657A">Every 2 weeks · Maria R.</span>
+</div>
+</div>
+<h3 style="margin: 8px 0 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #55657A">Activity</h3>
+<sc-for list="{{activity}}" as="e" hint-placeholder-count="3">
+<div style="display: flex; gap: 10px; font-size: 13px">
+<span style="width: 8px; height: 8px; margin-top: 6px; flex-shrink: 0; border-radius: 999px; background: {{accent}}"></span>
+<div style="display: flex; flex-direction: column; gap: 1px">
+<span style="font-weight: 500">{{e.t}}</span>
+<span style="font-size: 12px; color: #55657A">{{e.when}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { sel: 0 }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentTint = this.mix(accent, 0.88);
+    var selBg = this.mix(accent, 0.93);
+    var av = [['#E0F2FE', '#0369A1'], ['#EDE9FE', '#6D28D9'], ['#FEF3C7', '#92400E'], ['#DCFCE7', '#15803D']];
+    var data = [
+      ['Olivia Chen', 'olivia.chen@gmail.com', '(403) 555-0142', 'Today', '$3,860', ['Recurring', 'VIP']],
+      ['Marcus Webb', 'mwebb@outlook.com', '(403) 555-0187', 'Today', '$1,245', ['Recurring']],
+      ['Harbor Dental Clinic', 'office@harbordental.ca', '(403) 555-0110', 'Today', '$12,300', ['Commercial']],
+      ['Priya Natarajan', 'priya.n@gmail.com', '(587) 555-0133', 'Aug 12', '$385', ['Move-out']],
+      ['Hannah Lee', 'hannahlee@icloud.com', '(403) 555-0164', 'Sep 16', '$2,035', ['Recurring', 'Card issue']],
+      ['Daniel Ortiz', 'dortiz@shaw.ca', '(403) 555-0158', 'Sep 2', '$980', ['Deep clean']],
+      ['Grace Kim', 'grace@kimstays.com', '(587) 555-0121', 'Sep 27', '$4,420', ['Airbnb']],
+      ['Samuel Adeyemi', 's.adeyemi@gmail.com', '(403) 555-0199', 'Sep 17', '$1,650', ['Recurring']],
+      ['Rachel Moreau', 'rachel.moreau@telus.net', '(403) 555-0176', 'Jul 30', '$620', ['One-time']],
+      ['Kevin Tran', 'kevin.tran@gmail.com', '(587) 555-0145', 'Sep 15', '$495', ['Paused']],
+      ['Amelia Brooks', 'abrooks@gmail.com', '(403) 555-0103', 'Sep 21', '$2,780', ['Recurring']]
+    ];
+    var rows = data.map(function (d, i) {
+      var ini = d[0].split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('');
+      var p = av[i % 4];
+      var on = self.state.sel === i;
+      return {
+        name: d[0], email: d[1], phone: d[2], last: d[3], ltv: d[4], tags: d[5], ini: ini,
+        pick: function () { self.setState({ sel: i }); },
+        rowStyle: 'height: 58px; border-bottom: 1px solid #F1F5F9; cursor: pointer; background: ' + (on ? selBg : '#ffffff'),
+        avStyle: 'width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: ' + p[0] + '; color: ' + p[1]
+      };
+    });
+    var sel = rows[this.state.sel] || rows[0];
+    var actions = [
+      { label: 'Call', d: 'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z' },
+      { label: 'Text', d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+      { label: 'Email', d: 'M4 4h16v16H4zM22 6l-10 7L2 6' },
+      { label: 'Book a job', d: 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4M12 13v5M9.5 15.5h5' }
+    ];
+    var activity = [
+      { t: 'Job completed · Deep clean · $320', when: 'Today, 11:05 AM' },
+      { t: 'Left a 5-star review', when: 'Sep 16' },
+      { t: 'Invoice #1043 paid · $185', when: 'Sep 16' }
+    ];
+    return { accent: accent, sidebarColor: sidebarColor, accentStrong: accentStrong, accentTint: accentTint, rows: rows, sel: sel, actions: actions, activity: activity };
+  }
+}
+</script>
+</body>
+</html>

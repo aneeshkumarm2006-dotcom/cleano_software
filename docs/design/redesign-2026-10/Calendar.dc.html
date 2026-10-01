@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Calendar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="Sidebar" active="Calendar" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700; flex-grow: 1">Calendar</h1>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+New job
+</button>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px">
+<section style="height: 100%; box-sizing: border-box; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+<div style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 10px">
+<button type="button" style="height: 36px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Today</button>
+<button type="button" aria-label="Previous week" style="width: 36px; height: 36px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #3A4A5C; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></button>
+<button type="button" aria-label="Next week" style="width: 36px; height: 36px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #3A4A5C; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></button>
+<span style="font-size: 16px; font-weight: 700; margin-left: 6px">Sep 28 – Oct 4, 2026</span>
+<span style="flex-grow: 1"></span>
+<sc-for list="{{crews}}" as="c" hint-placeholder-count="4">
+<span style="display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid #E5EAF0; border-radius: 999px; font-size: 13px; font-weight: 600; color: #3A4A5C">
+<span style="{{c.dot}}"></span>{{c.name}}
+</span>
+</sc-for>
+<div role="group" aria-label="View" style="display: flex; padding: 3px; margin-left: 8px; border-radius: 8px; background: #F1F5F9">
+<sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+<button type="button" onClick="{{v.pick}}" aria-pressed="{{v.on}}" style="{{v.style}}">{{v.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-shrink: 0; border-bottom: 1px solid #E5EAF0">
+<div style="width: 64px; flex-shrink: 0"></div>
+<sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+<div style="flex-grow: 1; flex-basis: 0; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-left: 1px solid #E5EAF0">
+<span style="font-size: 12px; font-weight: 600; color: #55657A; text-transform: uppercase; letter-spacing: 0.04em">{{d.dow}}</span>
+<span style="{{d.numStyle}}">{{d.num}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; overflow: hidden; display: flex">
+<div style="width: 64px; flex-shrink: 0; display: flex; flex-direction: column">
+<sc-for list="{{hours}}" as="h" hint-placeholder-count="10">
+<div style="height: 58px; flex-shrink: 0; box-sizing: border-box; padding: 0 10px 0 0; text-align: right; font-size: 11px; font-weight: 600; color: #55657A; transform: translateY(-7px)">{{h}}</div>
+</sc-for>
+</div>
+<sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+<div style="{{d.colStyle}}">
+<sc-for list="{{d.events}}" as="e" hint-placeholder-count="2">
+<a href="Jobs.dc.html" style="{{e.style}}">
+<span style="font-size: 12px; font-weight: 700">{{e.time}}</span>
+<span style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.client}}</span>
+<span style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.service}}</span>
+</a>
+</sc-for>
+<sc-if value="{{d.isToday}}" hint-placeholder-val="{{ false }}">
+<div style="{{nowStyle}}"></div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { view: 'Week' }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var H = 58, START = 8;
+    var palette = {
+      A: { name: 'Crew A', bg: this.mix(accent, 0.86), dot: accent, fg: this.shade(accent, 0.55) },
+      B: { name: 'Crew B', bg: '#EEF2F6', dot: '#2B3337', fg: '#334155' },
+      C: { name: 'Crew C', bg: '#FEF3C7', dot: '#F59E0B', fg: '#92400E' },
+      D: { name: 'Crew D', bg: '#DCFCE7', dot: '#22C55E', fg: '#15803D' }
+    };
+    var crews = ['A', 'B', 'C', 'D'].map(function (k) {
+      return { name: palette[k].name, dot: 'width: 10px; height: 10px; border-radius: 999px; background: ' + palette[k].dot };
+    });
+    var views = ['Day', 'Week', 'Month'].map(function (v) {
+      var on = self.state.view === v;
+      return { label: v, on: on ? 'true' : 'false', pick: function () { self.setState({ view: v }); },
+        style: 'height: 30px; padding: 0 14px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; ' + (on ? 'background: #ffffff; color: #0F1B2A; font-weight: 700; box-shadow: 0 1px 2px rgba(30,42,48,0.12)' : 'background: transparent; color: #475569; font-weight: 600') };
+    });
+    var hours = ['8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM'];
+    var ev = {
+      0: [[8, 3, 'Olivia Chen', 'Deep clean', 'A'], [9.5, 2, 'Kevin Tran', 'Standard clean', 'B'], [13, 2.5, 'Amelia Brooks', 'Standard clean', 'C']],
+      1: [[8.5, 2, 'Samuel Adeyemi', 'Standard clean', 'D'], [11, 3, 'Rachel Moreau', 'Deep clean', 'A'], [14, 2, 'Grace Kim', 'Airbnb turnover', 'B']],
+      2: [[8, 3, 'Olivia Chen', 'Deep clean', 'A'], [9.5, 2, 'Marcus Webb', 'Standard clean', 'B'], [10, 4, 'Harbor Dental', 'Commercial', 'D'], [13, 2, 'Hannah Lee', 'Standard clean', 'C'], [14.5, 3, 'Daniel Ortiz', 'Deep clean', 'A']],
+      3: [[9, 2, 'Priya Natarajan', 'Move-out clean', 'C'], [12, 2.5, 'Liam Foster', 'Standard clean', 'B'], [15, 2, 'Nora Singh', 'Standard clean', 'D']],
+      4: [[8, 4, 'Harbor Dental', 'Commercial', 'D'], [10, 2, 'Ethan Park', 'Standard clean', 'A'], [13.5, 3, 'Sofia Rossi', 'Deep clean', 'C']],
+      5: [[9, 3, 'Grace Kim', 'Airbnb turnover', 'B'], [13, 2, 'Amelia Brooks', 'Standard clean', 'A']],
+      6: []
+    };
+    var labels = [['Mon', 28], ['Tue', 29], ['Wed', 30], ['Thu', 1], ['Fri', 2], ['Sat', 3], ['Sun', 4]];
+    var fmt = function (t) { var h = Math.floor(t), m = Math.round((t - h) * 60); var ap = h >= 12 ? 'PM' : 'AM'; var hh = h > 12 ? h - 12 : h; return hh + ':' + (m < 10 ? '0' : '') + m + ' ' + ap; };
+    var days = labels.map(function (l, i) {
+      var today = i === 2;
+      var list = ev[i];
+      var events = list.map(function (e, k) {
+        var overlap = list.some(function (o, j) { return j !== k && o[0] < e[0] + e[1] && e[0] < o[0] + o[1]; });
+        var lane = overlap ? list.filter(function (o, j) { return j < k && o[0] < e[0] + e[1] && e[0] < o[0] + o[1]; }).length % 2 : 0;
+        var p = palette[e[4]];
+        var left = overlap ? (lane ? '50%' : '4px') : '4px';
+        var width = overlap ? 'calc(50% - 6px)' : 'calc(100% - 8px)';
+        return {
+          time: fmt(e[0]), client: e[2], service: e[3],
+          style: 'position: absolute; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 8px; text-decoration: none; border: 1px solid rgba(30,42,48,0.06); top: ' + ((e[0] - START) * H + 2) + 'px; height: ' + (e[1] * H - 4) + 'px; left: ' + left + '; width: ' + width + '; background: ' + p.bg + '; color: ' + p.fg
+        };
+      });
+      return {
+        dow: l[0], num: l[1], isToday: today, events: events,
+        numStyle: today ? 'width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; background: ' + accentStrong + '; color: #ffffff' : 'font-size: 15px; font-weight: 700; color: #0F1B2A',
+        colStyle: 'position: relative; flex-grow: 1; flex-basis: 0; border-left: 1px solid #E5EAF0; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent ' + (H - 1) + 'px, #F1F5F9 ' + (H - 1) + 'px, #F1F5F9 ' + H + 'px);' + (today ? ' background-color: ' + self.mix(accent, 0.96) + ';' : '')
+      };
+    });
+    var nowStyle = 'position: absolute; left: 0; right: 0; top: ' + Math.round((11.4 - START) * H) + 'px; height: 2px; background: #EF4444';
+    return { accent: accent, sidebarColor: sidebarColor, accentStrong: accentStrong, crews: crews, views: views, hours: hours, days: days, nowStyle: nowStyle };
+  }
+}
+</script>
+</body>
+</html>

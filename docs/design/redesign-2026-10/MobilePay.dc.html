@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops Pro – My pay</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; box-sizing: border-box; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; flex-grow: 1">My pay</h1>
+<a href="#" style="font-size: 14px; font-weight: 700; text-decoration: none">Pay stubs</a>
+</div>
+
+<section style="background: {{accentStrong}}; color: #ffffff; border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 10px 24px rgba(7,122,180,0.26)">
+<span style="font-size: 13px; font-weight: 700">Available to withdraw</span>
+<span style="font-size: 44px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; font-variant-numeric: tabular-nums">$642.50</span>
+<span style="font-size: 13px; font-weight: 500">Next automatic payout Fri, Oct 2</span>
+<div style="display: flex; gap: 10px; margin-top: 12px">
+<button type="button" style="flex-grow: 1; height: 48px; border: 0; border-radius: 12px; background: #ffffff; color: {{accentDeep}}; font: inherit; font-size: 15px; font-weight: 800">Withdraw now</button>
+</div>
+<span style="font-size: 12px; font-weight: 500; margin-top: 4px">Instant withdrawals have a $1.50 fee.</span>
+</section>
+
+<section style="background: #ffffff; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(30,42,48,0.06)">
+<div style="display: flex; align-items: baseline">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800; flex-grow: 1">This week</h2>
+<span style="font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums">$186</span>
+</div>
+<div style="display: flex; gap: 20px">
+<div style="display: flex; flex-direction: column"><span style="font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums">7.5 h</span><span style="font-size: 12px; font-weight: 600; color: #55657A">Worked</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums">$24</span><span style="font-size: 12px; font-weight: 600; color: #55657A">Tips</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums">$18</span><span style="font-size: 12px; font-weight: 600; color: #55657A">Mileage</span></div>
+</div>
+<div style="height: 96px; display: flex; align-items: flex-end; gap: 10px">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
+<div style="flex-grow: 1; flex-basis: 0; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div style="{{b.style}}"></div>
+<span style="{{b.dayStyle}}">{{b.day}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Recent</h2>
+<div style="background: #ffffff; border-radius: 16px; box-shadow: 0 1px 2px rgba(30,42,48,0.06)">
+<sc-for list="{{items}}" as="it" hint-placeholder-count="4">
+<div style="{{it.row}}">
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 1px">
+<span style="font-size: 14px; font-weight: 700">{{it.t}}</span>
+<span style="font-size: 12px; color: #55657A">{{it.sub}}</span>
+</div>
+<span style="{{it.amtStyle}}">{{it.amt}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<nav aria-label="Tabs" style="position: absolute; left: 16px; right: 16px; bottom: 20px; height: 66px; box-sizing: border-box; padding: 6px; border-radius: 999px; background: {{sidebarColor}}; display: flex; box-shadow: 0 10px 24px rgba(30,42,48,0.28)">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+<a href="{{t.href}}" style="{{t.style}}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="{{t.d}}"></path></svg>
+<span style="font-size: 11px; font-weight: 700">{{t.label}}</span>
+</a>
+</sc-for>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentDeep = this.shade(accent, 0.55);
+    var accentPale = this.mix(accent, 0.7);
+    var deep = this.shade(sidebarColor, 0.62);
+    var raw = [['M', 72, 1], ['T', 48, 1], ['W', 66, 1], ['T', 0, 0], ['F', 0, 0], ['S', 0, 0], ['S', 0, 0]];
+    var planned = [0, 0, 0, 72, 54, 48, 0];
+    var bars = raw.map(function (r, i) {
+      var v = r[1] || planned[i];
+      var h = Math.max(4, Math.round(v / 72 * 70));
+      return { day: r[0],
+        style: 'width: 100%; height: ' + h + 'px; border-radius: 5px; background: ' + (r[1] ? accent : (v ? accentPale : '#F1F5F9')),
+        dayStyle: 'font-size: 12px; ' + (i === 2 ? 'font-weight: 800; color: #0F1B2A' : 'font-weight: 600; color: #55657A') };
+    });
+    var row = function (last) { return 'display: flex; align-items: center; gap: 12px; padding: 12px 16px;' + (last ? '' : ' border-bottom: 1px solid #F1F5F9'); };
+    var plus = 'font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: #15803D';
+    var minus = 'font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: #0F1B2A';
+    var items = [
+      { t: 'Olivia Chen · Deep clean', sub: 'Today · 3 h · pending approval', amt: '+$66.00', amtStyle: plus, row: row(false) },
+      { t: 'Kevin Tran · Standard', sub: 'Tue, Sep 29 · 2 h', amt: '+$48.00', amtStyle: plus, row: row(false) },
+      { t: 'Withdrawal to TD ••• 0192', sub: 'Sat, Sep 26', amt: '−$300.00', amtStyle: minus, row: row(true) }
+    ];
+    var I = {
+      today: 'M12 3 2 11h3v9h5v-6h4v6h5v-9h3z',
+      jobs: 'M9 2h6a1 1 0 0 1 1 1v1h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V3a1 1 0 0 1 1-1zm-1 9v2h8v-2zm0 4v2h5v-2z',
+      pay: 'M3 6a2 2 0 0 1 2-2h13v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm13 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z',
+      chat: 'M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',
+      more: 'M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'
+    };
+    var tabs = [['Today', I.today, 'MobileToday.dc.html'], ['Jobs', I.jobs, 'MobileAvailable.dc.html'], ['Pay', I.pay, 'MobilePay.dc.html'], ['Chat', I.chat, '#'], ['More', I.more, '#']].map(function (t, i) {
+      var on = i === 2;
+      return { label: t[0], d: t[1], href: t[2],
+        style: 'flex-grow: 1; flex-basis: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 999px; text-decoration: none; ' + (on ? 'background: #ffffff; color: ' + deep : 'color: #ffffff') };
+    });
+    return { sidebarColor: sidebarColor, accentStrong: accentStrong, accentDeep: accentDeep, bars: bars, items: items, tabs: tabs };
+  }
+}
+</script>
+</body>
+</html>

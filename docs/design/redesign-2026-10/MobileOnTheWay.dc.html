@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops – Cleaner on the way</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#EEF2F6;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #EEF2F6; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A">
+<svg width="390" height="470" viewBox="0 0 390 470" aria-label="Map showing the cleaner's route to your home" role="img" style="position: absolute; left: 0; top: 0; display: block">
+<rect width="390" height="470" fill="#EEF2F6"></rect>
+<rect x="18" y="30" width="120" height="90" rx="8" fill="#f5f7f8"></rect>
+<rect x="160" y="30" width="210" height="90" rx="8" fill="#f5f7f8"></rect>
+<rect x="18" y="146" width="80" height="130" rx="8" fill="#dcebe0"></rect>
+<rect x="120" y="146" width="130" height="130" rx="8" fill="#f5f7f8"></rect>
+<rect x="272" y="146" width="98" height="130" rx="8" fill="#f5f7f8"></rect>
+<rect x="18" y="302" width="170" height="150" rx="8" fill="#f5f7f8"></rect>
+<rect x="210" y="302" width="160" height="150" rx="8" fill="#f5f7f8"></rect>
+<path d="M0 133h390M0 289h390M149 0v470M261 0v470M109 133v157M199 289v181" stroke="#ffffff" stroke-width="14" fill="none"></path>
+<path d="M149 440V289h112V190" stroke="{{accentStrong}}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+<path d="M261 190V133h58" stroke="{{accentStrong}}" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 10" fill="none"></path>
+<circle cx="261" cy="190" r="18" fill="#ffffff"></circle>
+<circle cx="261" cy="190" r="13" fill="{{accentStrong}}"></circle>
+<path d="M255 193l1.2-3.6a1.6 1.6 0 0 1 1.5-1.1h6.6a1.6 1.6 0 0 1 1.5 1.1L267 193v3h-12z" fill="#ffffff"></path>
+<path d="M319 110a14 14 0 0 1 14 14c0 10-14 22-14 22s-14-12-14-22a14 14 0 0 1 14-14z" fill="{{sidebarColor}}"></path>
+<circle cx="319" cy="124" r="5" fill="#ffffff"></circle>
+</svg>
+
+<a href="MobileCustomerHome.dc.html" aria-label="Back" style="position: absolute; left: 20px; top: 20px; width: 44px; height: 44px; border-radius: 999px; background: #ffffff; color: #0F1B2A; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(30,42,48,0.16)">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.4 4.6 8 12l7.4 7.4-1.8 1.8L4.4 12l9.2-9.2z"></path></svg>
+</a>
+
+<section style="position: absolute; left: 0; right: 0; bottom: 0; height: 420px; box-sizing: border-box; padding: 10px 20px 28px; background: #ffffff; border-radius: 24px 24px 0 0; box-shadow: 0 -8px 24px rgba(30,42,48,0.12); display: flex; flex-direction: column; gap: 16px">
+<span style="align-self: center; width: 40px; height: 5px; border-radius: 999px; background: #D7DEE7"></span>
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 2px">
+<span style="font-size: 13px; font-weight: 700; color: #55657A">Wed, Sep 30 · Deep clean</span>
+<h1 style="margin: 0; font-size: 22px; font-weight: 800">Maria is on the way</h1>
+<span style="font-size: 14px; color: #3A4A5C">Arrives around 8:52 AM</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end">
+<span style="font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: {{accentStrong}}; font-variant-numeric: tabular-nums">12</span>
+<span style="font-size: 13px; font-weight: 700; color: #55657A">min away</span>
+</div>
+</div>
+
+<ol style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+<li style="display: flex; flex-direction: column; gap: 6px">
+<span style="{{s.bar}}"></span>
+<span style="{{s.label}}">{{s.name}}</span>
+</li>
+</sc-for>
+</ol>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #F4F7FB">
+<span style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 999px; background: {{accentTint}}; color: {{accentDeep}}; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800">MR</span>
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 1px">
+<span style="font-size: 15px; font-weight: 800">Maria Reyes <span style="font-weight: 600; color: #55657A">· 4.9</span></span>
+<span style="font-size: 12px; color: #55657A">with Jordan T. · grey Toyota Corolla</span>
+</div>
+</div>
+
+<div style="display: flex; gap: 10px">
+<button type="button" style="flex-grow: 1; height: 50px; border: 1px solid #D7DEE7; border-radius: 14px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="{{accentStrong}}" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"></path></svg>
+Call
+</button>
+<button type="button" style="flex-grow: 1; height: 50px; border: 0; border-radius: 14px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path></svg>
+Message
+</button>
+</div>
+<span style="text-align: center; font-size: 13px; color: #55657A">Need to leave a key or note? <a href="#" style="font-weight: 700; text-decoration: none">Add entry notes</a></span>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentDeep = this.shade(accent, 0.55);
+    var accentTint = this.mix(accent, 0.86);
+    var steps = [['Booked', 2], ['On the way', 1], ['Cleaning', 0], ['Done', 0]].map(function (s) {
+      return { name: s[0],
+        bar: 'height: 6px; border-radius: 999px; background: ' + (s[1] === 2 ? accentStrong : s[1] === 1 ? accent : '#E5EAF0'),
+        label: 'font-size: 12px; ' + (s[1] === 1 ? 'font-weight: 800; color: #0F1B2A' : s[1] === 2 ? 'font-weight: 700; color: #3A4A5C' : 'font-weight: 600; color: #55657A') };
+    });
+    return { sidebarColor: sidebarColor, accentStrong: accentStrong, accentDeep: accentDeep, accentTint: accentTint, steps: steps };
+  }
+}
+</script>
+</body>
+</html>

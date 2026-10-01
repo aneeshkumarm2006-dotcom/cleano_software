@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Available jobs</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="CleanerSidebar" active="Available jobs" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px; flex-grow: 1">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700">Available jobs</h1>
+<span style="font-size: 13px; color: #55657A">9 open near you</span>
+</div>
+<span style="font-size: 13px; color: #55657A">Exact address shows after you claim</span>
+</header>
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; gap: 8px; align-items: center">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="5">
+<button type="button" onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="{{c.style}}">{{c.label}}</button>
+</sc-for>
+<span style="flex-grow: 1"></span>
+<button type="button" style="height: 38px; padding: 0 12px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px"><span style="color: #55657A">Sort:</span> <strong>Soonest</strong></button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{jobs}}" as="j" hint-placeholder-count="9">
+<article style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: flex-start; gap: 10px">
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 2px">
+<span style="font-size: 13px; font-weight: 700; color: #55657A">{{j.when}}</span>
+<span style="font-size: 16px; font-weight: 700">{{j.service}}</span>
+<span style="font-size: 13px; color: #3A4A5C">{{j.area}} · {{j.dist}}</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end">
+<span style="font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums">{{j.pay}}</span>
+<span style="font-size: 12px; color: #55657A">{{j.hours}}</span>
+</div>
+</div>
+<div style="display: flex; gap: 6px">
+<sc-for list="{{j.tags}}" as="t" hint-placeholder-count="2">
+<span style="{{t.style}}">{{t.label}}</span>
+</sc-for>
+</div>
+<button type="button" onClick="{{j.claim}}" style="{{j.btn}}">{{j.btnLabel}}</button>
+</article>
+</sc-for>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { chip: 'All', claimed: {} }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentTint = this.mix(accent, 0.88);
+    var accentDeep = this.shade(accent, 0.55);
+    var chips = ['All', 'This week', 'Next week', 'Under 10 km', 'Team jobs'].map(function (c) {
+      var on = self.state.chip === c;
+      return { label: c, on: on ? 'true' : 'false', pick: function () { self.setState({ chip: c }); },
+        style: 'height: 36px; padding: 0 14px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; ' + (on ? 'border: 0; background: ' + accentStrong + '; color: #ffffff' : 'border: 1px solid #D7DEE7; background: #ffffff; color: #0F1B2A') };
+    });
+    var tag = function (label, kind) {
+      var c = { bonus: ['#DCFCE7', '#15803D'], team: [accentTint, accentDeep], note: ['#F1F5F9', '#3A4A5C'] }[kind];
+      return { label: label, style: 'height: 24px; padding: 0 9px; display: inline-flex; align-items: center; border-radius: 999px; font-size: 12px; font-weight: 700; background: ' + c[0] + '; color: ' + c[1] };
+    };
+    var data = [
+      ['Thu, Oct 1 · 8:00 AM', 'Standard clean', 'Legacy SE', '7 km', '$48', '2 h', [tag('Recurring', 'note')]],
+      ['Thu, Oct 1 · 1:00 PM', 'Deep clean', 'Mahogany SE', '9 km', '$84', '3.5 h', [tag('+$10 bonus', 'bonus'), tag('With Jordan', 'team')]],
+      ['Fri, Oct 2 · 9:00 AM', 'Move-out clean', 'Bridgeland NE', '12 km', '$72', '3 h', [tag('Empty home', 'note')]],
+      ['Fri, Oct 2 · 2:00 PM', 'Airbnb turnover', 'Kensington NW', '4 km', '$36', '1.5 h', [tag('Same day', 'note')]],
+      ['Sat, Oct 3 · 10:00 AM', 'Standard clean', 'Evanston NW', '15 km', '$48', '2 h', [tag('+$8 weekend', 'bonus')]],
+      ['Sat, Oct 3 · 1:30 PM', 'Commercial', 'Beltline', '5 km', '$96', '4 h', [tag('Team of 2', 'team')]],
+      ['Mon, Oct 5 · 8:30 AM', 'Deep clean', 'Aspen Woods SW', '3 km', '$84', '3.5 h', [tag('Pets', 'note')]],
+      ['Mon, Oct 5 · 12:00 PM', 'Standard clean', 'Cranston SE', '10 km', '$48', '2 h', [tag('Recurring', 'note')]],
+      ['Tue, Oct 6 · 9:00 AM', 'Move-in clean', 'Sage Hill NW', '14 km', '$78', '3.25 h', [tag('+$10 bonus', 'bonus')]]
+    ];
+    var jobs = data.map(function (d, i) {
+      var got = !!self.state.claimed[i];
+      return { when: d[0], service: d[1], area: d[2], dist: d[3], pay: d[4], hours: d[5], tags: d[6],
+        claim: function () { var n = Object.assign({}, self.state.claimed); n[i] = true; self.setState({ claimed: n }); },
+        btnLabel: got ? 'Claimed · added to My jobs' : 'Claim job',
+        btn: 'height: 40px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; ' + (got ? 'border: 0; background: #DCFCE7; color: #15803D' : 'border: 0; background: ' + accentStrong + '; color: #ffffff') };
+    });
+    return { accent: accent, sidebarColor: sidebarColor, chips: chips, jobs: jobs };
+  }
+}
+</script>
+</body>
+</html>

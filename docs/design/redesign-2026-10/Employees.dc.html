@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Employees</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="Sidebar" active="Employees" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px; flex-grow: 1">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700">Employees</h1>
+<span style="font-size: 13px; color: #55657A">18 active</span>
+</div>
+<button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600">Approve time (4)</button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+Invite employee
+</button>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+<div style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; font-weight: 600; color: #55657A">{{k.label}}</span>
+<span style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums">{{k.value}}</span>
+<span style="font-size: 13px; color: #55657A">{{k.note}}</span>
+</div>
+</sc-for>
+</div>
+
+<section style="flex-grow: 1; min-height: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+<div role="tablist" aria-label="Employee status" style="height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: stretch; gap: 24px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}<span style="{{t.countStyle}}">{{t.count}}</span></button>
+</sc-for>
+</div>
+<table style="width: 100%; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="background: #F8FAFC; height: 42px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #55657A">
+<th style="padding: 0 12px 0 20px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Employee</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Status</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Right now</th>
+<th style="padding: 0 12px; font-weight: 700; text-align: right; border-bottom: 1px solid #E5EAF0">Hours this week</th>
+<th style="padding: 0 12px; font-weight: 700; text-align: right; border-bottom: 1px solid #E5EAF0">Rating</th>
+<th style="padding: 0 12px; font-weight: 700; text-align: right; border-bottom: 1px solid #E5EAF0">Pay rate</th>
+<th style="padding: 0 20px 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Actions</span></th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="9">
+<tr style="height: 56px; border-bottom: 1px solid #F1F5F9">
+<td style="padding: 0 12px 0 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="{{r.av}}">{{r.i}}</span>
+<div style="display: flex; flex-direction: column">
+<span style="font-weight: 600">{{r.name}}</span>
+<span style="font-size: 12px; color: #55657A">{{r.role}}</span>
+</div>
+</div>
+</td>
+<td style="padding: 0 12px"><span style="{{r.badge}}"><span style="{{r.dot}}"></span>{{r.status}}</span></td>
+<td style="padding: 0 12px; color: #3A4A5C">{{r.now}}</td>
+<td style="padding: 0 12px; text-align: right">
+<div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px">
+<div style="width: 80px; height: 6px; border-radius: 999px; background: #F1F5F9; overflow: hidden"><div style="{{r.bar}}"></div></div>
+<span style="width: 44px; font-weight: 600; font-variant-numeric: tabular-nums">{{r.hours}}</span>
+</div>
+</td>
+<td style="padding: 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">{{r.rating}}</td>
+<td style="padding: 0 12px; text-align: right; color: #3A4A5C; font-variant-numeric: tabular-nums">{{r.rate}}</td>
+<td style="padding: 0 20px 0 12px; text-align: right"><a href="#" style="font-size: 13px; font-weight: 700; text-decoration: none">View</a></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { tab: 'Active' }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentTint = this.mix(accent, 0.88);
+    var kpis = [
+      { label: 'On shift now', value: '6', note: 'of 9 scheduled today' },
+      { label: 'Hours this week', value: '212 h', note: 'Target 260 h' },
+      { label: 'Time to approve', value: '4', note: 'Oldest from Sep 28' },
+      { label: 'Open applications', value: '3', note: '1 new today' }
+    ];
+    var tabs = [['Active', 18], ['Invited', 2], ['Inactive', 5]].map(function (t) {
+      var on = self.state.tab === t[0];
+      return { label: t[0], count: t[1], on: on ? 'true' : 'false', pick: function () { self.setState({ tab: t[0] }); },
+        style: 'display: flex; align-items: center; gap: 8px; padding: 0 2px; border: 0; border-bottom: 2px solid ' + (on ? accent : 'transparent') + '; margin-bottom: -1px; background: transparent; font: inherit; font-size: 14px; cursor: pointer; font-weight: ' + (on ? '700; color: #0F1B2A' : '500; color: #55657A'),
+        countStyle: 'font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; ' + (on ? 'background: ' + accentTint + '; color: ' + accentStrong : 'background: #F1F5F9; color: #475569') };
+    });
+    var st = { 'On shift': ['#DCFCE7', '#15803D', '#22C55E'], 'Driving': ['#E0F2FE', '#0369A1', accent], 'Off today': ['#F1F5F9', '#475569', '#94A3B8'], 'On leave': ['#FEF3C7', '#92400E', '#F59E0B'] };
+    var pal = [['#E0F2FE', '#0369A1'], ['#EDE9FE', '#6D28D9'], ['#FEF3C7', '#92400E'], ['#DCFCE7', '#15803D']];
+    var data = [
+      ['Maria Reyes', 'Field lead · Crew A', 'On shift', 'Olivia Chen · Deep clean', 31.5, '4.9', '$24/h'],
+      ['Jordan Taylor', 'Cleaner · Crew A', 'On shift', 'Olivia Chen · Deep clean', 28, '4.8', '$22/h'],
+      ['Aisha Khan', 'Cleaner · Crew B', 'On shift', 'Marcus Webb · Standard', 26, '4.9', '$22/h'],
+      ['Leo Nguyen', 'Field lead · Crew D', 'On shift', 'Harbor Dental · Commercial', 34, '4.7', '$25/h'],
+      ['Dana Silva', 'Cleaner · Crew D', 'On shift', 'Harbor Dental · Commercial', 30, '4.8', '$22/h'],
+      ['Chris Morgan', 'Cleaner · Crew C', 'Driving', 'To Hannah Lee · ETA 12 min', 22.5, '4.6', '$21/h'],
+      ['Sam Patel', 'Cleaner · Crew C', 'Off today', 'Next shift Thu 8:00 AM', 18, '4.9', '$21/h'],
+      ['Emily Wright', 'Ops manager', 'Off today', 'Next shift Thu 9:00 AM', 21, '–', '$28/h'],
+      ['Noah Bennett', 'Cleaner · Crew B', 'On leave', 'Back Oct 6', 0, '4.5', '$21/h']
+    ];
+    var rows = data.map(function (d, i) {
+      var s = st[d[2]], p = pal[i % 4];
+      return { name: d[0], role: d[1], status: d[2], now: d[3], hours: d[4] + ' h', rating: d[5], rate: d[6],
+        i: d[0].split(' ').map(function (w) { return w[0]; }).join(''),
+        av: 'width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: ' + p[0] + '; color: ' + p[1],
+        badge: 'display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: ' + s[0] + '; color: ' + s[1],
+        dot: 'width: 6px; height: 6px; border-radius: 999px; background: ' + s[2],
+        bar: 'height: 100%; border-radius: 999px; width: ' + Math.min(100, Math.round(d[4] / 40 * 100)) + '%; background: ' + accent };
+    });
+    return { accent: accent, sidebarColor: sidebarColor, accentStrong: accentStrong, kpis: kpis, tabs: tabs, rows: rows };
+  }
+}
+</script>
+</body>
+</html>

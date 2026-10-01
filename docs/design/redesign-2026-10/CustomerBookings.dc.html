@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My bookings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden; display: flex; flex-direction: column">
+<header style="height: 72px; flex-shrink: 0; box-sizing: border-box; padding: 0 120px; background: {{sidebarColor}}; color: #ffffff; display: flex; align-items: center; gap: 32px">
+<span style="display: flex; align-items: center; gap: 10px">
+<span style="width: 36px; height: 36px; border-radius: 9px; background: #ffffff; color: {{sidebarColor}}; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800">B</span>
+<span style="font-size: 18px; font-weight: 800">Bookmops</span>
+</span>
+<nav aria-label="Account" style="display: flex; gap: 6px; flex-grow: 1">
+<sc-for list="{{nav}}" as="n" hint-placeholder-count="4">
+<a href="{{n.href}}" style="{{n.style}}">{{n.label}}</a>
+</sc-for>
+</nav>
+<a href="CustomerBook.dc.html" style="height: 40px; padding: 0 16px; border-radius: 8px; background: #ffffff; color: {{deep}}; font-size: 14px; font-weight: 800; text-decoration: none; display: flex; align-items: center">Book a clean</a>
+<span style="width: 38px; height: 38px; border-radius: 999px; background: {{deep}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">OC</span>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 32px 120px; display: flex; gap: 24px">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 800">Bookings</h1>
+<h2 style="margin: 4px 0 0; font-size: 16px; font-weight: 800">Upcoming</h2>
+<sc-for list="{{upcoming}}" as="u" hint-placeholder-count="2">
+<article style="{{u.card}}">
+<span style="{{u.dateBox}}"><span style="font-size: 12px; font-weight: 800">{{u.mon}}</span><span style="font-size: 26px; font-weight: 800; line-height: 1">{{u.day}}</span></span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1">
+<span style="font-size: 17px; font-weight: 800">{{u.title}}</span>
+<span style="font-size: 14px">{{u.when}}</span>
+<span style="font-size: 13px">{{u.who}}</span>
+</div>
+<a href="CustomerBookingDetail.dc.html" style="{{u.btn}}">Details</a>
+</article>
+</sc-for>
+<h2 style="margin: 8px 0 0; font-size: 16px; font-weight: 800">Past cleans</h2>
+<div style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px">
+<sc-for list="{{past}}" as="p" hint-placeholder-count="4">
+<div style="{{p.row}}">
+<span style="width: 110px; font-size: 14px; font-weight: 700">{{p.date}}</span>
+<span style="flex-grow: 1; font-size: 14px; color: #3A4A5C">{{p.what}}</span>
+<span style="{{p.rateStyle}}">{{p.rate}}</span>
+<span style="width: 90px; text-align: right; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums">{{p.amt}}</span>
+<a href="#" style="width: 70px; text-align: right; font-size: 13px; font-weight: 700; text-decoration: none">Receipt</a>
+</div>
+</sc-for>
+</div>
+</div>
+
+<aside style="width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; padding-top: 48px">
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Your plan</h2>
+<span style="font-size: 22px; font-weight: 800">Every 2 weeks</span>
+<span style="font-size: 14px; color: #3A4A5C">Standard clean · 3 bed, 2 bath · Wednesdays 9:00 AM</span>
+<div style="display: flex; gap: 8px; margin-top: 6px">
+<button type="button" style="flex-grow: 1; height: 40px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 700">Pause</button>
+<button type="button" style="flex-grow: 1; height: 40px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 700">Change plan</button>
+</div>
+</section>
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Payment</h2>
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #E5EAF0; border-radius: 8px">
+<span style="width: 38px; height: 26px; border-radius: 5px; background: #0F1B2A; color: #ffffff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center">VISA</span>
+<span style="flex-grow: 1; font-size: 14px; font-weight: 600">•••• 4242</span>
+<a href="#" style="font-size: 13px; font-weight: 700; text-decoration: none">Update</a>
+</div>
+<span style="font-size: 13px; color: #55657A">Charged after each clean.</span>
+</section>
+<section style="background: {{accentTint}}; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800; color: {{accentDeep}}">Give $25, get $25</h2>
+<span style="font-size: 14px; color: {{accentDeep}}">Share your link with a friend. You both get $25 off your next clean.</span>
+<button type="button" style="margin-top: 6px; height: 40px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 700">Copy invite link</button>
+</section>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentDeep = this.shade(accent, 0.55);
+    var accentTint = this.mix(accent, 0.88);
+    var deep = this.shade(sidebarColor, 0.72);
+    var nav = [['Home', '#'], ['Bookings', 'CustomerBookings.dc.html'], ['Account', '#'], ['Help', '#']].map(function (n) {
+      var on = n[0] === 'Bookings';
+      return { label: n[0], href: n[1], style: 'height: 38px; padding: 0 14px; border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: ' + (on ? '800; background: ' + deep : '600') + '; text-decoration: none; display: flex; align-items: center' };
+    });
+    var upcoming = [
+      { mon: 'OCT', day: '14', title: 'Standard clean', when: 'Wednesday · arrive 9:00 AM · about 2.5 h', who: 'Maria R. · 214 Aspen Ridge Pl SW', first: 1 },
+      { mon: 'OCT', day: '28', title: 'Standard clean', when: 'Wednesday · arrive 9:00 AM · about 2.5 h', who: 'Cleaner assigned 2 days before', first: 0 }
+    ].map(function (u) {
+      u.card = 'display: flex; align-items: center; gap: 18px; padding: 18px 20px; border-radius: 12px; ' + (u.first ? 'background: ' + accentStrong + '; color: #ffffff' : 'background: #ffffff; border: 1px solid #E5EAF0; color: #3A4A5C');
+      u.dateBox = 'width: 64px; height: 64px; flex-shrink: 0; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; ' + (u.first ? 'background: #ffffff; color: ' + accentDeep : 'background: ' + accentTint + '; color: ' + accentDeep);
+      u.btn = 'height: 40px; padding: 0 18px; border-radius: 8px; font-size: 14px; font-weight: 800; text-decoration: none; display: flex; align-items: center; ' + (u.first ? 'background: #ffffff; color: ' + accentDeep : 'border: 1px solid #D7DEE7; color: #0F1B2A');
+      return u;
+    });
+    var past = [
+      ['Sep 30', 'Deep clean · Maria R., Jordan T.', 0, '$358.40'],
+      ['Sep 16', 'Standard clean · Maria R.', 5, '$185.00'],
+      ['Sep 2', 'Standard clean · Maria R.', 5, '$185.00'],
+      ['Aug 19', 'Standard clean · Aisha K.', 4, '$185.00']
+    ].map(function (p, i) {
+      return { date: p[0], what: p[1], amt: p[3], rate: p[2] ? '★ ' + p[2] + '.0' : 'Rate this clean',
+        rateStyle: 'width: 120px; font-size: 13px; font-weight: 800; color: ' + (p[2] ? '#92400E' : accentStrong),
+        row: 'display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px;' + (i < 3 ? ' border-bottom: 1px solid #F1F5F9' : '') };
+    });
+    return { sidebarColor: sidebarColor, accentStrong: accentStrong, accentDeep: accentDeep, accentTint: accentTint, deep: deep, nav: nav, upcoming: upcoming, past: past };
+  }
+}
+</script>
+</body>
+</html>

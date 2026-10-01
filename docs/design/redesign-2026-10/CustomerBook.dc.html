@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Book a clean</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden; display: flex; flex-direction: column">
+<header style="height: 72px; flex-shrink: 0; box-sizing: border-box; padding: 0 120px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 32px">
+<a href="#" style="display: flex; align-items: center; gap: 10px; color: #0F1B2A; text-decoration: none">
+<span style="width: 36px; height: 36px; border-radius: 9px; background: {{sidebarColor}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800">B</span>
+<span style="font-size: 18px; font-weight: 800">Bookmops</span>
+</a>
+<nav aria-label="Site" style="display: flex; gap: 24px; flex-grow: 1; font-size: 15px; font-weight: 600">
+<a href="#" style="color: #3A4A5C; text-decoration: none">Services</a>
+<a href="#" style="color: #3A4A5C; text-decoration: none">Pricing</a>
+<a href="#" style="color: #3A4A5C; text-decoration: none">Reviews</a>
+<a href="#" style="color: #3A4A5C; text-decoration: none">Careers</a>
+</nav>
+<a href="tel:+14035550100" style="font-size: 15px; font-weight: 700; color: #0F1B2A; text-decoration: none">(403) 555-0100</a>
+<a href="CustomerBookings.dc.html" style="height: 40px; padding: 0 16px; border: 1px solid #D7DEE7; border-radius: 8px; color: #0F1B2A; font-size: 14px; font-weight: 700; text-decoration: none; display: flex; align-items: center">Sign in</a>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 32px 120px; display: flex; gap: 32px">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.01em">Book a clean in Calgary</h1>
+<span style="font-size: 15px; color: #3A4A5C">See your price as you go. It takes about a minute.</span>
+</div>
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">1. Choose a service</h2>
+<div role="radiogroup" aria-label="Service" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{services}}" as="s" hint-placeholder-count="4">
+<button type="button" role="radio" aria-checked="{{s.on}}" onClick="{{s.pick}}" style="{{s.style}}">
+<span style="font-size: 15px; font-weight: 800">{{s.name}}</span>
+<span style="font-size: 13px">{{s.desc}}</span>
+<span style="font-size: 14px; font-weight: 800; margin-top: auto">{{s.from}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">2. Your home</h2>
+<div style="display: flex; gap: 12px">
+<sc-for list="{{steppers}}" as="st" hint-placeholder-count="2">
+<div style="flex-grow: 1; flex-basis: 0; display: flex; align-items: center; gap: 10px; height: 56px; box-sizing: border-box; padding: 0 8px 0 16px; border: 1px solid #E5EAF0; border-radius: 10px">
+<span style="flex-grow: 1; font-size: 15px; font-weight: 700">{{st.label}}</span>
+<button type="button" aria-label="{{st.minusLabel}}" onClick="{{st.dec}}" style="width: 40px; height: 40px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 18px; font-weight: 700">−</button>
+<span style="width: 28px; text-align: center; font-size: 18px; font-weight: 800">{{st.value}}</span>
+<button type="button" aria-label="{{st.plusLabel}}" onClick="{{st.inc}}" style="width: 40px; height: 40px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 18px; font-weight: 700">+</button>
+</div>
+</sc-for>
+<label style="flex-grow: 1; flex-basis: 0; display: flex; align-items: center; gap: 10px; height: 56px; box-sizing: border-box; padding: 0 16px; border: 1px solid #E5EAF0; border-radius: 10px">
+<span style="font-size: 15px; font-weight: 700; flex-grow: 1">How often</span>
+<select style="height: 40px; border: 1px solid #D7DEE7; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; font-weight: 600; color: #0F1B2A; background: #ffffff">
+<option>Every 2 weeks</option><option>Weekly</option><option>Monthly</option><option>Just once</option>
+</select>
+</label>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">3. Pick a day and arrival time</h2>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+<button type="button" onClick="{{d.pick}}" aria-pressed="{{d.on}}" style="{{d.style}}"><span style="font-size: 12px; font-weight: 700">{{d.dow}}</span><span style="font-size: 18px; font-weight: 800">{{d.num}}</span></button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{times}}" as="t" hint-placeholder-count="6">
+<button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" disabled="{{t.full}}" style="{{t.style}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">4. Extras</h2>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{addons}}" as="a" hint-placeholder-count="5">
+<button type="button" onClick="{{a.toggle}}" aria-pressed="{{a.on}}" style="{{a.style}}">{{a.label}} · {{a.price}}</button>
+</sc-for>
+</div>
+</div>
+</section>
+</div>
+
+<aside style="width: 380px; flex-shrink: 0; align-self: flex-start; margin-top: 76px; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 8px 24px rgba(30,42,48,0.06)">
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">Your clean</h2>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 15px; font-weight: 700">{{summaryTitle}}</span>
+<span style="font-size: 14px; color: #3A4A5C">{{summaryWhen}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #E5EAF0; font-size: 14px">
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="3">
+<div style="display: flex"><span style="flex-grow: 1; color: #3A4A5C">{{l.k}}</span><span style="font-weight: 600; font-variant-numeric: tabular-nums">{{l.v}}</span></div>
+</sc-for>
+</div>
+<div style="display: flex; align-items: baseline; padding-top: 12px; border-top: 1px solid #E5EAF0">
+<span style="flex-grow: 1; font-size: 16px; font-weight: 800">Total</span>
+<span style="font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums">{{total}}</span>
+</div>
+<label style="display: flex; gap: 8px">
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Promo code</span>
+<input type="text" placeholder="Promo code" style="flex-grow: 1; min-width: 0; height: 42px; box-sizing: border-box; padding: 0 12px; border: 1px solid #D7DEE7; border-radius: 8px; font: inherit; font-size: 14px; color: #0F1B2A">
+<button type="button" style="height: 42px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 700">Apply</button>
+</label>
+<button type="button" style="height: 52px; border: 0; border-radius: 10px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 16px; font-weight: 800">Continue to details</button>
+<span style="font-size: 13px; color: #55657A; text-align: center">Secure card payment with Stripe · GST added at checkout</span>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { svc: 0, beds: 3, baths: 2, day: 1, time: 1, add: { fridge: true } }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this, s = this.state;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentDeep = this.shade(accent, 0.55);
+    var accentTint = this.mix(accent, 0.9);
+    var svcDefs = [['Standard clean', 'Regular upkeep, every room', 110], ['Deep clean', 'Baseboards, inside cabinets', 200], ['Move in / out', 'Empty home, top to bottom', 245], ['Airbnb turnover', 'Linens, restock, reset', 90]];
+    var services = svcDefs.map(function (d, i) {
+      var on = s.svc === i;
+      return { name: d[0], desc: d[1], from: 'from $' + (d[2] + 55), on: on ? 'true' : 'false', pick: function () { self.setState({ svc: i }); },
+        style: 'height: 112px; padding: 14px; border-radius: 10px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 4px; cursor: pointer; ' + (on ? 'border: 2px solid ' + accentStrong + '; background: ' + accentTint + '; color: ' + accentDeep : 'border: 2px solid #E5EAF0; background: #ffffff; color: #0F1B2A') };
+    });
+    var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+    var steppers = [['beds', 'Bedrooms', 1, 8], ['baths', 'Bathrooms', 1, 6]].map(function (x) {
+      var o = {};
+      return { label: x[1], value: s[x[0]], minusLabel: 'Fewer ' + x[1].toLowerCase(), plusLabel: 'More ' + x[1].toLowerCase(),
+        dec: function () { o[x[0]] = clamp(s[x[0]] - 1, x[2], x[3]); self.setState(o); },
+        inc: function () { o[x[0]] = clamp(s[x[0]] + 1, x[2], x[3]); self.setState(o); } };
+    });
+    var dayDefs = [['Thu', 1], ['Fri', 2], ['Sat', 3], ['Mon', 5], ['Tue', 6], ['Wed', 7], ['Thu', 8]];
+    var days = dayDefs.map(function (d, i) {
+      var on = s.day === i;
+      return { dow: d[0], num: d[1], on: on ? 'true' : 'false', pick: function () { self.setState({ day: i }); },
+        style: 'width: 64px; height: 60px; border-radius: 10px; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; ' + (on ? 'border: 0; background: ' + accentStrong + '; color: #ffffff' : 'border: 1px solid #E5EAF0; background: #ffffff; color: #0F1B2A') };
+    });
+    var timeDefs = [['8:00 AM', 0], ['9:00 AM', 0], ['10:30 AM', 0], ['12:00 PM', 1], ['1:30 PM', 0], ['3:00 PM', 0]];
+    var times = timeDefs.map(function (t, i) {
+      var on = s.time === i, full = !!t[1];
+      return { label: full ? t[0] + ' · full' : t[0], on: on ? 'true' : 'false', full: full, pick: function () { if (!full) self.setState({ time: i }); },
+        style: 'height: 42px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; ' + (full ? 'border: 1px dashed #CBD5E1; background: transparent; color: #55657A' : on ? 'border: 2px solid ' + accentStrong + '; background: ' + accentTint + '; color: ' + accentDeep : 'border: 1px solid #E5EAF0; background: #ffffff; color: #0F1B2A') };
+    });
+    var addDefs = [['fridge', 'Inside fridge', 40], ['oven', 'Inside oven', 40], ['windows', 'Interior windows', 60], ['laundry', 'Laundry, 1 load', 25], ['cabinets', 'Inside cabinets', 45]];
+    var addTotal = 0, addLines = [];
+    var addons = addDefs.map(function (a) {
+      var on = !!s.add[a[0]];
+      if (on) { addTotal += a[2]; addLines.push({ k: a[1], v: '$' + a[2] + '.00' }); }
+      return { label: a[1], price: '+$' + a[2], on: on ? 'true' : 'false',
+        toggle: function () { var n = Object.assign({}, s.add); n[a[0]] = !on; self.setState({ add: n }); },
+        style: 'height: 40px; padding: 0 14px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; ' + (on ? 'border: 2px solid ' + accentStrong + '; background: ' + accentTint + '; color: ' + accentDeep : 'border: 1px solid #D7DEE7; background: #ffffff; color: #0F1B2A') };
+    });
+    var svc = svcDefs[s.svc];
+    var base = svc[2] + 20 * s.beds + 15 * s.baths;
+    var lines = [{ k: svc[0] + ' · ' + s.beds + ' bed, ' + s.baths + ' bath', v: '$' + base + '.00' }].concat(addLines);
+    var d = dayDefs[s.day], t = timeDefs[s.time];
+    return { accentStrong: accentStrong, sidebarColor: sidebarColor, services: services, steppers: steppers, days: days, times: times, addons: addons,
+      lines: lines, total: '$' + (base + addTotal), summaryTitle: svc[0] + ', every 2 weeks',
+      summaryWhen: d[0] + ', Oct ' + d[1] + ' · arrive ' + t[0] };
+  }
+}
+</script>
+</body>
+</html>

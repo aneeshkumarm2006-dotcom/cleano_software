@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops Pro – Assign crew</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; box-sizing: border-box; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px">
+<a href="AdminMobileToday.dc.html" aria-label="Back" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 999px; background: #ffffff; color: #0F1B2A; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(30,42,48,0.08)">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.4 4.6 8 12l7.4 7.4-1.8 1.8L4.4 12l9.2-9.2z"></path></svg>
+</a>
+<div style="display: flex; flex-direction: column; flex-grow: 1">
+<span style="font-size: 12px; font-weight: 700; color: #55657A">1 of 3 without a crew</span>
+<h1 style="margin: 0; font-size: 20px; font-weight: 800">Assign crew</h1>
+</div>
+</div>
+
+<div style="background: #ffffff; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 1px 2px rgba(30,42,48,0.06)">
+<div style="display: flex; align-items: baseline">
+<span style="font-size: 17px; font-weight: 800; flex-grow: 1">Priya Natarajan</span>
+<span style="font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums">$385</span>
+</div>
+<span style="font-size: 14px; color: #3A4A5C">Move-out clean · Today 12:30 – 3:00 PM</span>
+<span style="font-size: 13px; color: #55657A">31 Cranston Way SE · 3 bed · 2 bath</span>
+</div>
+
+<div style="display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 15px; font-weight: 800; flex-grow: 1">Best matches</h2>
+<span style="font-size: 12px; font-weight: 600; color: #55657A">By free time and distance</span>
+</div>
+
+<div role="radiogroup" aria-label="Cleaner" style="display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{people}}" as="p" hint-placeholder-count="4">
+<button type="button" role="radio" aria-checked="{{p.on}}" disabled="{{p.blocked}}" onClick="{{p.pick}}" style="{{p.card}}">
+<span style="{{p.av}}">{{p.i}}</span>
+<span style="display: flex; flex-direction: column; flex-grow: 1; gap: 3px; text-align: left">
+<span style="font-size: 15px; font-weight: 800">{{p.name}} <span style="font-weight: 600; color: #55657A">· {{p.rating}}</span></span>
+<span style="display: flex; gap: 6px">
+<span style="{{p.chip}}">{{p.free}}</span>
+<span style="font-size: 12px; font-weight: 600; color: #55657A; display: flex; align-items: center">{{p.dist}}</span>
+</span>
+</span>
+<span style="{{p.radio}}"></span>
+</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box; padding: 14px 20px 28px; background: #ffffff; border-top: 1px solid #E5EAF0; display: flex; flex-direction: column; gap: 12px">
+<label style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600">
+<input type="checkbox" checked="{{notify}}" onChange="{{toggleNotify}}" style="width: 20px; height: 20px; margin: 0; accent-color: {{accentStrong}}">
+Text the cleaner and the client
+</label>
+<button type="button" style="height: 52px; border: 0; border-radius: 14px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 16px; font-weight: 800">{{cta}}</button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { sel: 0, notify: true }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var accentStrong = this.vivid(accent);
+    var accentTint = this.mix(accent, 0.9);
+    var pal = [['#E0F2FE', '#0369A1'], ['#FEF3C7', '#92400E'], ['#DCFCE7', '#15803D'], ['#EDE9FE', '#6D28D9']];
+    var chip = function (bg, fg) { return 'height: 22px; padding: 0 8px; display: flex; align-items: center; border-radius: 999px; font-size: 12px; font-weight: 800; background: ' + bg + '; color: ' + fg; };
+    var data = [
+      ['Aisha Khan', '4.9', 'Free from 11:30', '6 km away', 0],
+      ['Sam Patel', '4.9', 'Day off · can ask', '9 km away', 1],
+      ['Dana Silva', '4.8', 'Free from 2:00', '4 km away', 1],
+      ['Chris Morgan', '4.6', 'Booked until 3:00', '11 km away', 2]
+    ];
+    var people = data.map(function (d, i) {
+      var on = self.state.sel === i, blocked = d[4] === 2, p = pal[i];
+      return { name: d[0], rating: d[1], free: d[2], dist: d[3], on: on ? 'true' : 'false', blocked: blocked,
+        i: d[0].split(' ').map(function (w) { return w[0]; }).join(''),
+        pick: function () { if (!blocked) self.setState({ sel: i }); },
+        card: 'display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 16px; font: inherit; color: #0F1B2A; cursor: pointer; ' + (on ? 'border: 2px solid ' + accentStrong + '; background: ' + accentTint : 'border: 2px solid transparent; background: #ffffff') + (blocked ? '; opacity: 0.6' : ''),
+        av: 'width: 42px; height: 42px; flex-shrink: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; background: ' + p[0] + '; color: ' + p[1],
+        chip: d[4] === 0 ? chip('#DCFCE7', '#15803D') : d[4] === 1 ? chip('#FEF3C7', '#92400E') : chip('#FEE2E2', '#B91C1C'),
+        radio: 'width: 22px; height: 22px; flex-shrink: 0; box-sizing: border-box; border-radius: 999px; ' + (on ? 'border: 7px solid ' + accentStrong + '; background: #ffffff' : 'border: 2px solid #CBD5E1; background: #ffffff') };
+    });
+    var chosen = data[this.state.sel][0].split(' ')[0];
+    return { accentStrong: accentStrong, people: people, notify: this.state.notify,
+      toggleNotify: function () { self.setState({ notify: !self.state.notify }); },
+      cta: 'Assign ' + chosen + ' · est. pay $60' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Booking detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden; display: flex; flex-direction: column">
+<header style="height: 72px; flex-shrink: 0; box-sizing: border-box; padding: 0 120px; background: {{sidebarColor}}; color: #ffffff; display: flex; align-items: center; gap: 32px">
+<span style="display: flex; align-items: center; gap: 10px">
+<span style="width: 36px; height: 36px; border-radius: 9px; background: #ffffff; color: {{sidebarColor}}; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800">B</span>
+<span style="font-size: 18px; font-weight: 800">Bookmops</span>
+</span>
+<nav aria-label="Account" style="display: flex; gap: 6px; flex-grow: 1">
+<a href="#" style="height: 38px; padding: 0 14px; border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Home</a>
+<a href="CustomerBookings.dc.html" style="height: 38px; padding: 0 14px; border-radius: 8px; background: {{deep}}; color: #ffffff; font-size: 15px; font-weight: 800; text-decoration: none; display: flex; align-items: center">Bookings</a>
+<a href="#" style="height: 38px; padding: 0 14px; border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Account</a>
+<a href="#" style="height: 38px; padding: 0 14px; border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; display: flex; align-items: center">Help</a>
+</nav>
+<span style="width: 38px; height: 38px; border-radius: 999px; background: {{deep}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">OC</span>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 28px 120px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+<nav aria-label="Breadcrumb" style="font-size: 13px; color: #55657A"><a href="CustomerBookings.dc.html" style="font-weight: 700; text-decoration: none">Bookings</a> / Oct 14</nav>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800">Standard clean · Wed, Oct 14</h1>
+<span style="font-size: 15px; color: #3A4A5C">Arrive 9:00 AM · about 2.5 hours · 214 Aspen Ridge Pl SW</span>
+</div>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 700">Skip this visit</button>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 800">Reschedule</button>
+</div>
+
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 20px 24px">
+<ol style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+<li style="display: flex; flex-direction: column; gap: 8px">
+<span style="{{s.bar}}"></span>
+<span style="{{s.label}}">{{s.name}}</span>
+<span style="font-size: 12px; color: #55657A">{{s.when}}</span>
+</li>
+</sc-for>
+</ol>
+</section>
+
+<div style="flex-grow: 1; min-height: 0; display: flex; gap: 20px">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Your cleaner</h2>
+<div style="display: flex; align-items: center; gap: 14px">
+<span style="width: 56px; height: 56px; border-radius: 999px; background: {{accentTint}}; color: {{accentDeep}}; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800">MR</span>
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 2px">
+<span style="font-size: 17px; font-weight: 800">Maria R.</span>
+<span style="font-size: 14px; color: #3A4A5C">4.9 from 212 cleans · your cleaner for 6 visits</span>
+</div>
+<button type="button" style="height: 40px; padding: 0 16px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 700">Message</button>
+</div>
+</section>
+<section style="flex-grow: 1; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800; flex-grow: 1">Notes for your cleaner</h2>
+<span style="font-size: 12px; color: #55657A">Saved for every visit</span>
+</div>
+<label style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; font-weight: 700; color: #3A4A5C">How to get in</span>
+<textarea rows="2" style="border: 1px solid #D7DEE7; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 14px; color: #0F1B2A; resize: none">Lockbox 4471 on the side gate. The dog is friendly, please keep the patio door shut.</textarea>
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; font-weight: 700; color: #3A4A5C">Anything to focus on</span>
+<textarea rows="2" placeholder="For example: the upstairs shower needs extra attention" style="border: 1px solid #D7DEE7; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 14px; color: #0F1B2A; resize: none"></textarea>
+</label>
+</section>
+</div>
+<aside style="width: 380px; flex-shrink: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start">
+<h2 style="margin: 0 0 4px; font-size: 16px; font-weight: 800">Price</h2>
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="3">
+<div style="display: flex; font-size: 14px"><span style="flex-grow: 1; color: #3A4A5C">{{l.k}}</span><span style="font-variant-numeric: tabular-nums">{{l.v}}</span></div>
+</sc-for>
+<div style="display: flex; align-items: baseline; padding-top: 10px; border-top: 1px solid #E5EAF0"><span style="flex-grow: 1; font-size: 15px; font-weight: 800">Total</span><span style="font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums">$194.25</span></div>
+<span style="font-size: 13px; color: #55657A">Charged to Visa •••• 4242 after the clean.</span>
+<a href="#" style="margin-top: 6px; font-size: 13px; font-weight: 700; color: #B91C1C; text-decoration: none">Cancel this booking</a>
+</aside>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentDeep = this.shade(accent, 0.55);
+    var accentTint = this.mix(accent, 0.86);
+    var deep = this.shade(sidebarColor, 0.72);
+    var steps = [['Booked', 'Sep 22', 2], ['Confirmed', 'Sep 22', 2], ['Cleaner assigned', 'Maria R. · Oct 1', 1], ['On the way', 'Oct 14', 0], ['Done', '', 0]].map(function (s) {
+      return { name: s[0], when: s[1],
+        bar: 'height: 6px; border-radius: 999px; background: ' + (s[2] === 2 ? accentStrong : s[2] === 1 ? accent : '#E5EAF0'),
+        label: 'font-size: 14px; ' + (s[2] ? 'font-weight: 800; color: #0F1B2A' : 'font-weight: 600; color: #55657A') };
+    });
+    var lines = [
+      { k: 'Standard clean · 3 bed, 2 bath', v: '$185.00' },
+      { k: 'GST 5%', v: '$9.25' }
+    ];
+    return { sidebarColor: sidebarColor, accentStrong: accentStrong, accentDeep: accentDeep, accentTint: accentTint, deep: deep, steps: steps, lines: lines };
+  }
+}
+</script>
+</body>
+</html>

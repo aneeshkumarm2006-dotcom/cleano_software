@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="Sidebar" active="Jobs" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 72px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+<nav aria-label="Breadcrumb" style="display: flex; gap: 6px; font-size: 13px; color: #55657A">
+<a href="Jobs.dc.html" style="font-weight: 600; text-decoration: none">Jobs</a><span>/</span><span>J-2041</span>
+</nav>
+<div style="display: flex; align-items: center; gap: 10px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700">Olivia Chen · Deep clean</h1>
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #FEF3C7; color: #92400E"><span style="width: 6px; height: 6px; border-radius: 999px; background: #F59E0B"></span>In progress</span>
+</div>
+</div>
+<button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600">Message client</button>
+<button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600">Edit job</button>
+<button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">Charge $358.40</button>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px; display: flex; gap: 20px">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<sc-for list="{{facts}}" as="f" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #55657A">{{f.k}}</span>
+<span style="font-size: 15px; font-weight: 700">{{f.v}}</span>
+<span style="font-size: 13px; color: #55657A">{{f.sub}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 12px; padding: 12px 14px; border-radius: 8px; background: #FFFBEB; font-size: 14px">
+<span style="font-weight: 700; color: #92400E">Access</span>
+<span style="color: #3A4A5C">Lockbox 4471 on the side gate. Friendly dog in the backyard, keep the patio door shut.</span>
+</div>
+</section>
+
+<div style="display: flex; gap: 20px">
+<section style="flex-grow: 1; flex-basis: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 52px; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700; flex-grow: 1">Crew &amp; pay</h2>
+<a href="#" style="font-size: 14px; font-weight: 600; text-decoration: none">Reassign</a>
+</div>
+<sc-for list="{{crew}}" as="c" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #F1F5F9">
+<span style="{{c.av}}">{{c.i}}</span>
+<div style="display: flex; flex-direction: column; flex-grow: 1">
+<span style="font-size: 14px; font-weight: 600">{{c.name}}</span>
+<span style="font-size: 12px; color: #55657A">{{c.clock}}</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end">
+<span style="font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums">{{c.pay}}</span>
+<span style="font-size: 12px; color: #55657A">{{c.rate}}</span>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; padding: 14px 20px; font-size: 14px">
+<span style="flex-grow: 1; color: #55657A">Margin after pay</span>
+<span style="font-weight: 700; color: #15803D">$214.40 · 60%</span>
+</div>
+</section>
+
+<section style="flex-grow: 1; flex-basis: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 52px; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700; flex-grow: 1">Checklist</h2>
+<span style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums">8 / 14</span>
+</div>
+<div style="padding: 8px 20px 14px; display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{rooms}}" as="r" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; font-size: 14px">
+<span style="flex-grow: 1; font-weight: 600">{{r.name}}</span>
+<span style="font-weight: 600; color: #3A4A5C; font-variant-numeric: tabular-nums">{{r.count}}</span>
+</div>
+<div style="height: 6px; border-radius: 999px; background: #F1F5F9; overflow: hidden"><div style="{{r.bar}}"></div></div>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<section style="flex-grow: 1; min-height: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700; flex-grow: 1">Photos</h2>
+<span style="font-size: 13px; color: #55657A">4 before · 2 after</span>
+</div>
+<div style="flex-grow: 1; padding: 16px 20px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{photos}}" as="p" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="aspect-ratio: 1 / 1; border-radius: 8px; background: #EEF2F6; display: flex; align-items: center; justify-content: center; color: #55657A">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 12h12l-4-5-3 3.5-2-2.5z"></path></svg>
+</div>
+<span style="font-size: 12px; font-weight: 600; color: #3A4A5C">{{p}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<div style="width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px">
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 52px; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700; flex-grow: 1">Payment</h2>
+<span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #E0F2FE; color: #0369A1">Card on file</span>
+</div>
+<div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="4">
+<div style="display: flex"><span style="flex-grow: 1; color: #3A4A5C">{{l.k}}</span><span style="font-variant-numeric: tabular-nums">{{l.v}}</span></div>
+</sc-for>
+<div style="display: flex; padding-top: 10px; border-top: 1px solid #E5EAF0; font-size: 16px; font-weight: 700"><span style="flex-grow: 1">Total</span><span style="font-variant-numeric: tabular-nums">$358.40</span></div>
+<div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px; border: 1px solid #E5EAF0; border-radius: 8px">
+<span style="width: 38px; height: 26px; border-radius: 5px; background: #0F1B2A; color: #ffffff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center">VISA</span>
+<span style="flex-grow: 1; font-weight: 600">•••• 4242</span>
+<span style="font-size: 12px; color: #55657A">Exp 08/28</span>
+</div>
+</div>
+</section>
+
+<section style="flex-grow: 1; min-height: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Activity</h2>
+</div>
+<div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 16px">
+<sc-for list="{{activity}}" as="e" hint-placeholder-count="5">
+<div style="display: flex; gap: 12px">
+<span style="{{e.dot}}"></span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 14px; font-weight: 600">{{e.t}}</span>
+<span style="font-size: 12px; color: #55657A">{{e.when}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var facts = [
+      { k: 'When', v: 'Wed, Sep 30', sub: '8:00 – 11:00 AM · 3 h' },
+      { k: 'Address', v: '214 Aspen Ridge Pl SW', sub: 'Calgary, AB T3H 0K2' },
+      { k: 'Home', v: '3 bed · 2 bath', sub: '1,800 sq ft · 1 dog' },
+      { k: 'Repeats', v: 'Every 2 weeks', sub: 'Next: Oct 14' }
+    ];
+    var av = function (bg, fg) { return 'width: 36px; height: 36px; flex-shrink: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: ' + bg + '; color: ' + fg; };
+    var crew = [
+      { i: 'MR', name: 'Maria Reyes', clock: 'Clocked in 7:58 AM · on site', pay: '$72.00', rate: '$24/h · 3 h', av: av('#E0F2FE', '#0369A1') },
+      { i: 'JT', name: 'Jordan Taylor', clock: 'Clocked in 8:04 AM · on site', pay: '$72.00', rate: '$24/h · 3 h', av: av('#FEF3C7', '#92400E') }
+    ];
+    var bar = function (pct, c) { return 'height: 100%; border-radius: 999px; width: ' + pct + '%; background: ' + c; };
+    var rooms = [
+      { name: 'Kitchen', count: '4 / 4', bar: bar(100, '#22C55E') },
+      { name: 'Bathrooms', count: '2 / 4', bar: bar(50, accent) },
+      { name: 'Bedrooms', count: '2 / 4', bar: bar(50, accent) },
+      { name: 'Living room', count: '0 / 2', bar: bar(0, accent) }
+    ];
+    var photos = ['Before · Kitchen', 'Before · Bath 1', 'Before · Bath 2', 'Before · Living', 'After · Kitchen', 'After · Bath 1'];
+    var lines = [
+      { k: 'Deep clean · 3 bed, 2 bath', v: '$280.00' },
+      { k: 'Inside fridge', v: '$40.00' },
+      { k: 'Discount · FALL10', v: '−$32.00' },
+      { k: 'GST 5%', v: '$14.40' }
+    ];
+    var dot = function (c) { return 'width: 10px; height: 10px; margin-top: 5px; flex-shrink: 0; border-radius: 999px; background: ' + c; };
+    var activity = [
+      { t: 'Jordan Taylor clocked in', when: 'Today, 8:04 AM', dot: dot(accent) },
+      { t: 'Maria Reyes clocked in', when: 'Today, 7:58 AM', dot: dot(accent) },
+      { t: 'Reminder text sent to client', when: 'Yesterday, 6:00 PM', dot: dot('#94A3B8') },
+      { t: 'Crew assigned by Prem Sai', when: 'Sep 24, 2:12 PM', dot: dot('#94A3B8') },
+      { t: 'Booked online · FALL10 applied', when: 'Sep 22, 9:41 PM', dot: dot('#22C55E') }
+    ];
+    return { accent: accent, sidebarColor: sidebarColor, accentStrong: accentStrong, facts: facts, crew: crew, rooms: rooms, photos: photos, lines: lines, activity: activity };
+  }
+}
+</script>
+</body>
+</html>

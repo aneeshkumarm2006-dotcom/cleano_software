@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops Pro – Approve time</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; box-sizing: border-box; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px">
+<a href="AdminMobileToday.dc.html" aria-label="Back" style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 999px; background: #ffffff; color: #0F1B2A; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(30,42,48,0.08)">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.4 4.6 8 12l7.4 7.4-1.8 1.8L4.4 12l9.2-9.2z"></path></svg>
+</a>
+<h1 style="margin: 0; font-size: 20px; font-weight: 800; flex-grow: 1">Approve time</h1>
+<span style="font-size: 14px; font-weight: 800; color: {{accentStrong}}">{{left}} left</span>
+</div>
+
+<sc-for list="{{entries}}" as="e" hint-placeholder-count="3">
+<article style="background: #ffffff; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(30,42,48,0.06)">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="{{e.av}}">{{e.i}}</span>
+<div style="display: flex; flex-direction: column; flex-grow: 1">
+<span style="font-size: 15px; font-weight: 800">{{e.name}}</span>
+<span style="font-size: 12px; color: #55657A">{{e.job}}</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end">
+<span style="font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums">{{e.hours}}</span>
+<span style="{{e.diffStyle}}">{{e.diff}}</span>
+</div>
+</div>
+<div style="display: flex; gap: 8px; font-size: 13px">
+<span style="flex-grow: 1; flex-basis: 0; padding: 8px 10px; border-radius: 10px; background: #F4F7FB"><span style="color: #55657A">In </span><strong>{{e.in}}</strong></span>
+<span style="flex-grow: 1; flex-basis: 0; padding: 8px 10px; border-radius: 10px; background: #F4F7FB"><span style="color: #55657A">Out </span><strong>{{e.out}}</strong></span>
+</div>
+<span style="{{e.geoStyle}}">{{e.geo}}</span>
+<sc-if value="{{e.done}}" hint-placeholder-val="{{ false }}">
+<span style="height: 44px; border-radius: 12px; background: #DCFCE7; color: #15803D; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center">Approved</span>
+</sc-if>
+<sc-if value="{{e.open}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; gap: 8px">
+<button type="button" style="flex-grow: 1; flex-basis: 0; height: 44px; border: 1px solid #D7DEE7; border-radius: 12px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 700">Adjust</button>
+<button type="button" onClick="{{e.approve}}" style="flex-grow: 2; flex-basis: 0; height: 44px; border: 0; border-radius: 12px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 800">Approve</button>
+</div>
+</sc-if>
+</article>
+</sc-for>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box; padding: 14px 20px 28px; background: #ffffff; border-top: 1px solid #E5EAF0">
+<button type="button" onClick="{{approveAll}}" style="width: 100%; height: 52px; border: 0; border-radius: 14px; background: {{sidebarColor}}; color: #ffffff; font: inherit; font-size: 16px; font-weight: 800">Approve all on-site entries</button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { done: {} }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var pal = [['#E0F2FE', '#0369A1'], ['#FEF3C7', '#92400E'], ['#DCFCE7', '#15803D']];
+    var data = [
+      ['Maria Reyes', 'Kevin Tran · Standard · Tue', '2.0 h', 'On time', 0, '9:28 AM', '11:30 AM', 1],
+      ['Chris Morgan', 'Sofia Rossi · Deep clean · Mon', '3.4 h', '+24 min over', 1, '1:30 PM', '4:54 PM', 1],
+      ['Sam Patel', 'Liam Foster · Standard · Mon', '2.6 h', '+6 min over', 0, '12:02 PM', '2:38 PM', 0]
+    ];
+    var entries = data.map(function (d, i) {
+      var p = pal[i], done = !!self.state.done[i];
+      return { name: d[0], job: d[1], hours: d[2], diff: d[3], in: d[5], out: d[6], done: done, open: !done,
+        i: d[0].split(' ').map(function (w) { return w[0]; }).join(''),
+        av: 'width: 40px; height: 40px; flex-shrink: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; background: ' + p[0] + '; color: ' + p[1],
+        diffStyle: 'font-size: 12px; font-weight: 800; color: ' + (d[4] ? '#92400E' : '#15803D'),
+        geo: d[7] ? 'Clocked in and out on site' : 'Clocked out 1.2 km from the home',
+        geoStyle: 'font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 8px; align-self: flex-start; ' + (d[7] ? 'background: #DCFCE7; color: #15803D' : 'background: #FEE2E2; color: #B91C1C'),
+        approve: function () { var n = Object.assign({}, self.state.done); n[i] = true; self.setState({ done: n }); } };
+    });
+    var left = entries.filter(function (e) { return !e.done; }).length + 1;
+    return { accentStrong: accentStrong, sidebarColor: sidebarColor, entries: entries, left: left,
+      approveAll: function () { self.setState({ done: { 0: true, 1: true } }); } };
+  }
+}
+</script>
+</body>
+</html>

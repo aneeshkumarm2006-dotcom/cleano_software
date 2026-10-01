@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops – My bookings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; box-sizing: border-box; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800">Bookings</h1>
+<div role="group" aria-label="Show" style="display: flex; padding: 4px; border-radius: 12px; background: #E5EAF0">
+<sc-for list="{{seg}}" as="s" hint-placeholder-count="2">
+<button type="button" onClick="{{s.pick}}" aria-pressed="{{s.on}}" style="{{s.style}}">{{s.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{showUpcoming}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<a href="MobileOnTheWay.dc.html" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 18px; background: {{accentStrong}}; color: #ffffff; text-decoration: none; box-shadow: 0 8px 20px rgba(7,122,180,0.24)">
+<span style="font-size: 12px; font-weight: 800">NEXT</span>
+<span style="font-size: 22px; font-weight: 800">Wed, Oct 14 · 9:00 AM</span>
+<span style="font-size: 14px; font-weight: 500">Standard clean · Maria R.</span>
+<span style="margin-top: 8px; font-size: 13px; font-weight: 700">Tap for details and live tracking on the day</span>
+</a>
+<sc-for list="{{upcoming}}" as="u" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: #ffffff; box-shadow: 0 1px 2px rgba(30,42,48,0.06)">
+<span style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 12px; background: {{accentTint}}; color: {{accentDeep}}; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1"><span style="font-size: 11px; font-weight: 800">{{u.mon}}</span><span style="font-size: 18px; font-weight: 800">{{u.day}}</span></span>
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 2px">
+<span style="font-size: 15px; font-weight: 800">{{u.title}}</span>
+<span style="font-size: 13px; color: #55657A">{{u.sub}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{showPast}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border-radius: 16px; box-shadow: 0 1px 2px rgba(30,42,48,0.06)">
+<sc-for list="{{past}}" as="p" hint-placeholder-count="4">
+<div style="{{p.row}}">
+<div style="display: flex; flex-direction: column; flex-grow: 1; gap: 2px">
+<span style="font-size: 15px; font-weight: 800">{{p.date}}</span>
+<span style="font-size: 13px; color: #55657A">{{p.what}}</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+<span style="font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums">{{p.amt}}</span>
+<span style="{{p.rateStyle}}">{{p.rate}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<nav aria-label="Tabs" style="position: absolute; left: 16px; right: 16px; bottom: 20px; height: 66px; box-sizing: border-box; padding: 6px; border-radius: 999px; background: {{sidebarColor}}; display: flex; box-shadow: 0 10px 24px rgba(30,42,48,0.28)">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+<a href="{{t.href}}" style="{{t.style}}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="{{t.d}}"></path></svg>
+<span style="font-size: 11px; font-weight: 700">{{t.label}}</span>
+</a>
+</sc-for>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { seg: 'Upcoming' }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var accentDeep = this.shade(accent, 0.55);
+    var accentTint = this.mix(accent, 0.86);
+    var deep = this.shade(sidebarColor, 0.62);
+    var seg = ['Upcoming', 'Past'].map(function (s) {
+      var on = self.state.seg === s;
+      return { label: s, on: on ? 'true' : 'false', pick: function () { self.setState({ seg: s }); },
+        style: 'flex-grow: 1; height: 40px; border: 0; border-radius: 9px; font: inherit; font-size: 14px; ' + (on ? 'background: #ffffff; color: #0F1B2A; font-weight: 800; box-shadow: 0 1px 2px rgba(30,42,48,0.12)' : 'background: transparent; color: #3A4A5C; font-weight: 700') };
+    });
+    var upcoming = [
+      { mon: 'OCT', day: '28', title: 'Standard clean · 9:00 AM', sub: 'Cleaner assigned 2 days before' },
+      { mon: 'NOV', day: '11', title: 'Standard clean · 9:00 AM', sub: 'Every 2 weeks' },
+      { mon: 'NOV', day: '25', title: 'Standard clean · 9:00 AM', sub: 'Every 2 weeks' }
+    ];
+    var past = [['Sep 30', 'Deep clean · Maria R., Jordan T.', '$358.40', 0], ['Sep 16', 'Standard clean · Maria R.', '$185.00', 5], ['Sep 2', 'Standard clean · Maria R.', '$185.00', 5], ['Aug 19', 'Standard clean · Aisha K.', '$185.00', 4]].map(function (p, i) {
+      return { date: p[0], what: p[1], amt: p[2], rate: p[3] ? '★ ' + p[3] + '.0' : 'Rate it',
+        rateStyle: 'font-size: 12px; font-weight: 800; color: ' + (p[3] ? '#92400E' : accentStrong),
+        row: 'display: flex; align-items: center; gap: 12px; padding: 14px 16px;' + (i < 3 ? ' border-bottom: 1px solid #F1F5F9' : '') };
+    });
+    var I = {
+      home: 'M12 3 2 11h3v9h5v-6h4v6h5v-9h3z',
+      book: 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z',
+      bookings: 'M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zM5 10v10h14V10z',
+      chat: 'M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',
+      account: 'M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 12c5 0 9 2.5 9 6v2H3v-2c0-3.5 4-6 9-6z'
+    };
+    var tabs = [['Home', I.home, 'MobileCustomerHome.dc.html'], ['Book', I.book, 'MobileBook.dc.html'], ['Bookings', I.bookings, 'MobileBookings.dc.html'], ['Messages', I.chat, '#'], ['Account', I.account, '#']].map(function (t, i) {
+      var on = i === 2;
+      return { label: t[0], d: t[1], href: t[2],
+        style: 'flex-grow: 1; flex-basis: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 999px; text-decoration: none; ' + (on ? 'background: #ffffff; color: ' + deep : 'color: #ffffff') };
+    });
+    return { sidebarColor: sidebarColor, accentStrong: accentStrong, accentDeep: accentDeep, accentTint: accentTint, seg: seg,
+      showUpcoming: this.state.seg === 'Upcoming', showPast: this.state.seg === 'Past', upcoming: upcoming, past: past, tabs: tabs };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cleaner dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="CleanerSidebar" active="Dashboard" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; flex-grow: 1">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700">Good morning, Maria</h1>
+<span style="font-size: 13px; color: #55657A">Wednesday, September 30</span>
+</div>
+<a href="CleanerAvailable.dc.html" style="height: 40px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">9 open jobs</a>
+<button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">Clock out</button>
+</header>
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+<div style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; font-weight: 600; color: #55657A">{{k.label}}</span>
+<span style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums">{{k.value}}</span>
+<span style="font-size: 13px; color: #55657A">{{k.note}}</span>
+</div>
+</sc-for>
+</div>
+<div style="flex-grow: 1; min-height: 0; display: flex; gap: 20px">
+<section style="flex-grow: 1; min-width: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700; flex-grow: 1">Today</h2>
+<span style="font-size: 13px; color: #55657A">3 jobs · 7.5 h</span>
+</div>
+<div style="flex-grow: 1; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{jobs}}" as="j" hint-placeholder-count="3">
+<div style="display: flex; gap: 16px">
+<div style="width: 76px; flex-shrink: 0; padding-top: 14px; display: flex; flex-direction: column">
+<span style="font-size: 14px; font-weight: 700">{{j.start}}</span>
+<span style="font-size: 12px; color: #55657A">{{j.dur}}</span>
+</div>
+<div style="{{j.card}}">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="font-size: 16px; font-weight: 700; flex-grow: 1">{{j.client}}</span>
+<span style="{{j.badge}}">{{j.state}}</span>
+</div>
+<span style="font-size: 14px">{{j.service}} · {{j.address}}</span>
+<span style="font-size: 13px">{{j.note}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</section>
+<div style="width: 380px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px">
+<section style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Up next · 12:30 PM</h2>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 700">Priya Natarajan · Move-out clean</span>
+<span style="font-size: 13px; color: #55657A">31 Cranston Way SE · 18 min drive</span>
+</div>
+<div style="padding: 10px 12px; border-radius: 8px; background: #FFFBEB; font-size: 13px; color: #3A4A5C"><strong style="color: #92400E">Access</strong> · Lockbox 4471 on the front door. Empty home, bring the vacuum.</div>
+<div style="display: flex; gap: 10px">
+<button type="button" style="flex-grow: 1; height: 40px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600">Directions</button>
+<button type="button" style="flex-grow: 1; height: 40px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">I’m on my way</button>
+</div>
+</section>
+<section style="flex-grow: 1; min-height: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column">
+<div style="height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700; flex-grow: 1">Announcements</h2>
+<a href="#" style="font-size: 14px; font-weight: 600; text-decoration: none">All</a>
+</div>
+<sc-for list="{{news}}" as="n" hint-placeholder-count="3">
+<div style="padding: 14px 20px; border-bottom: 1px solid #F1F5F9; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 14px; font-weight: 700">{{n.t}}</span>
+<span style="font-size: 13px; color: #3A4A5C">{{n.body}}</span>
+<span style="font-size: 12px; color: #55657A">{{n.when}}</span>
+</div>
+</sc-for>
+</section>
+</div>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var kpis = [
+      { label: 'Jobs today', value: '3', note: '1 in progress' },
+      { label: 'Hours this week', value: '7.5 h', note: '24 h scheduled' },
+      { label: 'Pay this week', value: '$186', note: 'Paid out Fri, Oct 2' },
+      { label: 'My rating', value: '4.9', note: 'Last 30 cleans' }
+    ];
+    var pill = function (bg, fg) { return 'height: 24px; padding: 0 10px; display: inline-flex; align-items: center; border-radius: 999px; font-size: 12px; font-weight: 700; background: ' + bg + '; color: ' + fg; };
+    var jobs = [
+      { start: '8:00 AM', dur: '3 h', client: 'Olivia Chen', service: 'Deep clean', address: '214 Aspen Ridge Pl SW', note: 'Checklist 8 of 14 · with Jordan T.', state: 'On the clock 1:40', now: 1 },
+      { start: '12:30 PM', dur: '2.5 h', client: 'Priya Natarajan', service: 'Move-out clean', address: '31 Cranston Way SE', note: 'With Jordan T. · lockbox 4471', state: 'Next', now: 0 },
+      { start: '3:30 PM', dur: '1.5 h', client: 'Grace Kim', service: 'Airbnb turnover', address: '610 Kensington Rd NW', note: 'Guests arrive 4:00 PM, fresh linens in hall closet', state: 'Later', now: 0 }
+    ].map(function (j) {
+      j.card = 'flex-grow: 1; min-width: 0; padding: 14px 16px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; ' + (j.now ? 'background: ' + accentStrong + '; color: #ffffff' : 'background: #ffffff; border: 1px solid #E5EAF0; color: #3A4A5C');
+      j.badge = j.now ? pill('#ffffff', accentStrong) : pill('#F1F5F9', '#475569');
+      return j;
+    });
+    var news = [
+      { t: 'New eco supplies in the kit room', body: 'Pick up refills before Friday. Old bottles go in the blue bin.', when: 'Today · Emily W.' },
+      { t: 'Thanksgiving schedule', body: 'Monday Oct 12 is time-and-a-half. Open shifts are in Available jobs.', when: 'Sep 28 · Prem S.' },
+      { t: 'Five-star week for Crew A', body: 'Seven reviews, all five stars. Thank you!', when: 'Sep 26 · Prem S.' }
+    ];
+    return { accent: accent, sidebarColor: sidebarColor, accentStrong: accentStrong, kpis: kpis, jobs: jobs, news: news };
+  }
+}
+</script>
+</body>
+</html>

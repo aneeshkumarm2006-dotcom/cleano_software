@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cleaner sidebar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<nav aria-label="Main" style="width: 248px; height: 900px; box-sizing: border-box; background: {{sidebar}}; color: #ffffff; font-family: Figtree, system-ui, sans-serif; display: flex; flex-direction: column; padding: 16px 12px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: {{deep}}">
+<span style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; background: #ffffff; color: {{sidebar}}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px">B</span>
+<span style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0">
+<span style="font-weight: 700; font-size: 15px">Bookmops</span>
+<span style="font-size: 12px">Cleaner portal</span>
+</span>
+</div>
+<button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border: 0; border-radius: 10px; background: #ffffff; color: {{deep}}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: #22C55E"></span>
+On the clock · 1:40
+</button>
+<div style="flex-grow: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 12px 4px">{{sec.label}}</div>
+<sc-for list="{{sec.items}}" as="it" hint-placeholder-count="4">
+<a href="{{it.href}}" style="{{it.style}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{it.iconColor}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{it.d}}"></path></svg>
+<span style="flex-grow: 1">{{it.label}}</span>
+<sc-if value="{{it.count}}" hint-placeholder-val="{{ false }}">
+<span style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: #ffffff; color: #3A4A5C; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{it.count}}</span>
+</sc-if>
+</a>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid rgba(255,255,255,0.22)">
+<span style="width: 34px; height: 34px; border-radius: 999px; background: #ffffff; color: #3A4A5C; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">MR</span>
+<span style="display: flex; flex-direction: column; flex-grow: 1">
+<span style="font-size: 14px; font-weight: 600">Maria Reyes</span>
+<span style="font-size: 12px">Field lead · Crew A</span>
+</span>
+</div>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["Dashboard","My jobs","Available jobs","Calendar","Availability","My pay","My inventory","Training","Documents","Messages","Announcements"],"default":"Dashboard"},"sidebar":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"$preview":{"width":248,"height":900}}'>
+class Component extends DCLogic {
+  rgb(hex) {
+    var h = String(hex || '#2B3337').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  renderVals() {
+    var sidebar = this.props.sidebar ?? '#2B3337';
+    var accent = this.props.accent ?? '#1B9ADB';
+    var active = this.props.active ?? 'Dashboard';
+    var deep = this.mix(sidebar, 0.1); var activeBg = this.mix(sidebar, 0.16);
+    var accentLight = this.mix(accent, 0.45);
+    var base = 'display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border-radius: 8px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500;';
+    var I = {
+      dashboard: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
+      jobs: 'M9 3h6v4H9zM5 5h14v16H5zM9 12h6M9 16h4',
+      avail: 'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83',
+      calendar: 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4',
+      availability: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+      pay: 'M3 7h18v13H3zM3 7l3-4h12l3 4M16 13h2',
+      inventory: 'M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
+      training: 'M22 10 12 5 2 10l10 5zM6 12v5c3 2 9 2 12 0v-5',
+      docs: 'M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h6',
+      chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+      announce: 'M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM16 8a5 5 0 0 1 0 8'
+    };
+    var sections = [
+      { label: 'Workspace', items: [
+        { label: 'Dashboard', d: I.dashboard, href: 'CleanerDashboard.dc.html' },
+        { label: 'My jobs', d: I.jobs, href: '#' },
+        { label: 'Available jobs', d: I.avail, href: 'CleanerAvailable.dc.html', count: 9 },
+        { label: 'Calendar', d: I.calendar, href: '#' },
+        { label: 'Availability', d: I.availability, href: '#' }
+      ] },
+      { label: 'Earnings', items: [
+        { label: 'My pay', d: I.pay, href: 'CleanerPay.dc.html' },
+        { label: 'My inventory', d: I.inventory, href: '#' }
+      ] },
+      { label: 'Personal', items: [
+        { label: 'Training', d: I.training, href: '#' },
+        { label: 'Documents', d: I.docs, href: '#' },
+        { label: 'Messages', d: I.chat, href: '#', count: 2 },
+        { label: 'Announcements', d: I.announce, href: '#' }
+      ] }
+    ];
+    sections.forEach(function (s) {
+      s.items.forEach(function (it) {
+        var on = it.label === active;
+        it.style = base + (on ? ' background: ' + activeBg + '; font-weight: 700;' : '');
+        it.iconColor = on ? accentLight : '#ffffff';
+        it.count = it.count || false;
+      });
+    });
+    return { sidebar: sidebar, deep: deep, sections: sections };
+  }
+}
+</script>
+</body>
+</html>

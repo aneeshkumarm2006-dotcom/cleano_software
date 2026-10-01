@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Figtree,system-ui,sans-serif;background:#F4F7FB;color:#0F1B2A}
+a{color:#077AB4}a:hover{color:#055E8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F4F7FB; font-family: Figtree, system-ui, sans-serif; color: #0F1B2A; overflow: hidden">
+<dc-import name="Sidebar" active="Invoices" accent="{{accent}}" sidebar="{{sidebarColor}}" hint-size="248px,900px"></dc-import>
+<main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 64px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 700; flex-grow: 1">Invoices</h1>
+<button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #D7DEE7; border-radius: 8px; background: #ffffff; color: #0F1B2A; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Bulk charge</button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accentStrong}}; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+New invoice
+</button>
+</header>
+
+<div style="flex-grow: 1; min-height: 0; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<sc-for list="{{summary}}" as="s" hint-placeholder-count="3">
+<div style="background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; font-weight: 600; color: #55657A">{{s.label}}</span>
+<span style="font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums">{{s.value}}</span>
+<div style="height: 6px; border-radius: 999px; background: #F1F5F9; overflow: hidden"><div style="{{s.bar}}"></div></div>
+<span style="font-size: 13px; color: #55657A">{{s.note}}</span>
+</div>
+</sc-for>
+</div>
+
+<section style="flex-grow: 1; min-height: 0; background: #ffffff; border: 1px solid #E5EAF0; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+<div style="height: 60px; flex-shrink: 0; box-sizing: border-box; padding: 0 20px; border-bottom: 1px solid #E5EAF0; display: flex; align-items: center; gap: 10px">
+<div role="group" aria-label="Invoice status" style="display: flex; padding: 3px; border-radius: 8px; background: #F1F5F9">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+<button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="{{t.style}}">{{t.label}}</button>
+</sc-for>
+</div>
+<span style="flex-grow: 1"></span>
+<label style="display: flex; align-items: center; gap: 8px; width: 280px; height: 38px; box-sizing: border-box; padding: 0 12px; border: 1px solid #D7DEE7; border-radius: 8px; color: #55657A">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35"></path></svg>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search invoices</span>
+<input type="search" placeholder="Search invoice # or client" style="border: 0; outline: none; font: inherit; font-size: 14px; flex-grow: 1; min-width: 0; background: transparent; color: #0F1B2A">
+</label>
+</div>
+<table style="width: 100%; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="background: #F8FAFC; height: 42px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #55657A">
+<th style="padding: 0 12px 0 20px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Invoice</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Client</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Issued</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Due</th>
+<th style="padding: 0 12px; font-weight: 700; text-align: right; border-bottom: 1px solid #E5EAF0">Amount</th>
+<th style="padding: 0 12px; font-weight: 700; border-bottom: 1px solid #E5EAF0">Status</th>
+<th style="padding: 0 20px 0 12px; font-weight: 700; text-align: right; border-bottom: 1px solid #E5EAF0">Action</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<tr style="height: 54px; border-bottom: 1px solid #F1F5F9">
+<td style="padding: 0 12px 0 20px; font-weight: 600; font-variant-numeric: tabular-nums">{{r.no}}</td>
+<td style="padding: 0 12px">
+<div style="font-weight: 600">{{r.client}}</div>
+<div style="font-size: 12px; color: #55657A">{{r.job}}</div>
+</td>
+<td style="padding: 0 12px; color: #3A4A5C">{{r.issued}}</td>
+<td style="padding: 0 12px; color: #3A4A5C">{{r.due}}</td>
+<td style="padding: 0 12px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums">{{r.amount}}</td>
+<td style="padding: 0 12px"><span style="{{r.badge}}">{{r.status}}</span></td>
+<td style="padding: 0 20px 0 12px; text-align: right"><a href="#" style="font-size: 13px; font-weight: 700; text-decoration: none">{{r.action}}</a></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1B9ADB","options":["#1B9ADB","#1289E8","#13B5C6"]},"sidebarColor":{"editor":"color","default":"#2B3337","options":["#2B3337","#3A4449","#536369"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { tab: 'All' }; }
+  rgb(hex) {
+    var h = String(hex || '#1B9ADB').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  hex(a) { return '#' + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  shade(hex, f) { return this.hex(this.rgb(hex).map(function (v) { return v * f; })); }
+  mix(hex, a) { return this.hex(this.rgb(hex).map(function (v) { return v + (255 - v) * a; })); }
+  vivid(hex) { var c = this.rgb(hex); var mn = Math.min(c[0], c[1], c[2]); return this.hex(c.map(function (v) { return (v - mn * 0.7) * 0.9; })); }
+  renderVals() {
+    var self = this;
+    var accent = this.props.accent ?? '#1B9ADB';
+    var sidebarColor = this.props.sidebarColor ?? '#2B3337';
+    var accentStrong = this.vivid(accent);
+    var bar = function (pct, c) { return 'height: 100%; border-radius: 999px; width: ' + pct + '%; background: ' + c; };
+    var summary = [
+      { label: 'Outstanding', value: '$4,280', note: '18 invoices waiting on payment', bar: bar(38, accent) },
+      { label: 'Overdue', value: '$1,120', note: '5 invoices past their due date', bar: bar(14, '#EF4444') },
+      { label: 'Paid in the last 30 days', value: '$21,640', note: '142 invoices · avg 2.1 days to pay', bar: bar(84, '#22C55E') }
+    ];
+    var tabs = ['All', 'Draft', 'Open', 'Overdue', 'Paid'].map(function (t) {
+      var on = self.state.tab === t;
+      return { label: t, on: on ? 'true' : 'false', pick: function () { self.setState({ tab: t }); },
+        style: 'height: 30px; padding: 0 14px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; ' + (on ? 'background: #ffffff; color: #0F1B2A; font-weight: 700; box-shadow: 0 1px 2px rgba(30,42,48,0.12)' : 'background: transparent; color: #475569; font-weight: 600') };
+    });
+    var st = { 'Paid': ['#DCFCE7', '#15803D', 'View'], 'Open': ['#E0F2FE', '#0369A1', 'Send reminder'], 'Overdue': ['#FEE2E2', '#B91C1C', 'Charge card'], 'Draft': ['#F1F5F9', '#475569', 'Finish'] };
+    var data = [
+      ['#1058', 'Harbor Dental Clinic', 'Commercial · Sep 30', 'Sep 30', 'Oct 14', '$410.00', 'Open'],
+      ['#1057', 'Olivia Chen', 'Deep clean · Sep 30', 'Sep 30', 'Sep 30', '$320.00', 'Paid'],
+      ['#1056', 'Hannah Lee', 'Standard clean · Sep 28', 'Sep 28', 'Sep 28', '$185.00', 'Overdue'],
+      ['#1055', 'Grace Kim', 'Airbnb turnover · Sep 27', 'Sep 27', 'Oct 4', '$140.00', 'Open'],
+      ['#1054', 'Amelia Brooks', 'Standard clean · Sep 21', 'Sep 21', 'Sep 21', '$165.00', 'Paid'],
+      ['#1053', 'Priya Natarajan', 'Move-out clean · Oct 1', '—', '—', '$385.00', 'Draft'],
+      ['#1052', 'Samuel Adeyemi', 'Standard clean · Sep 17', 'Sep 17', 'Sep 24', '$165.00', 'Overdue'],
+      ['#1051', 'Daniel Ortiz', 'Deep clean · Sep 2', 'Sep 2', 'Sep 2', '$340.00', 'Paid']
+    ];
+    var rows = data.map(function (d) {
+      var s = st[d[6]];
+      return { no: d[0], client: d[1], job: d[2], issued: d[3], due: d[4], amount: d[5], status: d[6], action: s[2],
+        badge: 'display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: ' + s[0] + '; color: ' + s[1] };
+    });
+    return { accent: accent, sidebarColor: sidebarColor, accentStrong: accentStrong, summary: summary, tabs: tabs, rows: rows };
+  }
+}
+</script>
+</body>
+</html>
